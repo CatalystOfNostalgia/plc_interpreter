@@ -2,12 +2,23 @@
 
 (define interpret
   (lambda (filename)
-    ((interpret_start (parser filename) '('()'())))))
+    ((interpret_start (parser filename) '((return)(()))))))
 
-(define interpret_start
+(define M_state_statement
   (lambda (parse_tree state)
-    0))
+    (cond
+      ((if_return_has_val state) (get_val 'return state))
+      (else 0))))
 
+(define if_return_has_val
+  (lambda (state)
+    (if (null? (get_val 'return state))
+        #f
+        #t)))
+
+(define first_var caar)
+(define first_var_val cadr)
+              
 (define mvalexp
   (lambda (exp)
     (cond
