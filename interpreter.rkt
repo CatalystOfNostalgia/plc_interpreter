@@ -2,7 +2,11 @@
 
 (define interpret
   (lambda (filename)
-    ((interpret_start (parser filename)))))
+    ((interpret_start (parser filename) '('()'())))))
+
+(define interpret_start
+  (lambda (parse_tree state)
+    0))
 
 (define mvalexp
   (lambda (exp)
