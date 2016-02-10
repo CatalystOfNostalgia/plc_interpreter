@@ -2,22 +2,21 @@
 
 (define interpret
   (lambda (filename)
-    ((interpret_start (parser filename) '((return)(()))))))
+    ((interpret_start (parser filename) '(()())))))
 
 (define M_state_statement
   (lambda (parse_tree state)
     (cond
-      ((if_return_has_val state) (get_val 'return state))
-      (else 0))))
-
-(define if_return_has_val
-  (lambda (state)
-    (if (null? (get_val 'return state))
-        #f
-        #t)))
+      ((eq? (first_symbol parse_tree) 'var))
+      ((eq? (first_symbol parse_tree) '=))
+      ((eq? (first_symbol parse_tree) 'return) (M_val_expression (rest_of-statement) state)))
+      ((eq? (first_symbol parse_tree) 'if))
+      ((eq? (first_symbol parse_tree) 'while)))))
 
 (define first_var caar)
 (define first_var_val cadr)
+(define first_symbol caar)
+(define rest_of_statement cadr)
               
 (define mvalexp
   (lambda (exp)
