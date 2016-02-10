@@ -1,3 +1,9 @@
+(load "simpleParser.scm")
+
+(define interpret
+  (lambda (filename)
+    ((interpret_start (parser filename)))))
+
 (define mvalexp
   (lambda (exp)
     (cond
