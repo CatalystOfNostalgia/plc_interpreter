@@ -2,10 +2,10 @@
 
 (define interpret
   (lambda (filename)
-    (M_state_statement (parser filename) '(()()))))
+    (M_state_statement '(()()) (parser filename))))
 
 (define M_state_statement
-  (lambda (parse_tree state)
+  (lambda (state parse_tree)
     (cond
       ((null? (cdr state)) (car state))
       ((equal? (first_symbol parse_tree) 'return) (M_val_expression state (rest_of_statement parse_tree)))
@@ -21,7 +21,7 @@
 
 (define M_state_assign
   (lambda (state stmt)
-    (assign (symbol stmt) (M_val_expression state (assign_exp stmt)))))
+    (assign state (symbol stmt) (M_val_expression state (assign_exp stmt)))))
 
 (define M_state_if
   (lambda (state stmt)
@@ -39,18 +39,19 @@
 (define first_symbol caar)
 (define rest_of_statement cdar)
 (define symbol car)
-(define assign_exp caddr)
+(define assign_exp cdr)
               
 (define M_val_expression
   (lambda (state exp)
     (cond
+      ((null? exp) '())
       ((number? exp) exp)
-      ((eq? (operator exp) '+) (+ (mvalexp state (operand1 exp)) (mvalexp state (operand2 exp))))
-      ((eq? (operator exp) '-) (- (mvalexp state (operand1 exp)) (mvalexp state (operand2 exp))))
-      ((eq? (operator exp) '*) (* (mvalexp state (operand1 exp)) (mvalexp state (operand2 exp))))
-      ((eq? (operator exp) '/) (quotient (mvalexp state (operand1 exp)) (mvalexp state (operand2 exp))))
-      ((eq? (operator exp) '%) (remainder (mvalexp state (operand1 exp)) (mvalexp state (operand2 exp))))
-      ((list? (car exp)) (mvalexp state (car exp)))
+      ((eq? (operator exp) '+) (+ (M_val_expression state (operand1 exp)) (M_val_expression state (operand2 exp))))
+      ((eq? (operator exp) '-) (- (M_val_expression state (operand1 exp)) (M_val_expression state (operand2 exp))))
+      ((eq? (operator exp) '*) (* (M_val_expression state (operand1 exp)) (M_val_expression state (operand2 exp))))
+      ((eq? (operator exp) '/) (quotient (M_val_expression state (operand1 exp)) (M_val_expression state (operand2 exp))))
+      ((eq? (operator exp) '%) (remainder (M_val_expression state (operand1 exp)) (M_val_expression state (operand2 exp))))
+      ((list? (car exp)) (M_val_expression state (car exp)))
       ((number? (car exp)) (car exp))
       (else (get_val state (car exp))))))
 
