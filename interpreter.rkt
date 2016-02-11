@@ -7,6 +7,7 @@
 (define M_state_statement
   (lambda (parse_tree state)
     (cond
+      ((null? (cdr state)) (car state))
       ((eq? (first_symbol parse_tree) 'var) (M_state_statement (M_state_init state (rest_of_statement parse_tree)) (cdr parse_tree)))
       ((eq? (first_symbol parse_tree) '=) (M_state_statement (M_state_assign state (rest_of_statement parse_tree)) (cdr parse_tree)))
       ((eq? (first_symbol parse_tree) 'return) (M_val_expression state (rest_of-statement))))
