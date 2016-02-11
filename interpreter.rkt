@@ -7,13 +7,17 @@
 (define M_state_statement
   (lambda (state parse_tree)
     (cond
-      ((null? (cdr state)) (car state))
+      ((done? state) (return_val state))
       ((equal? (first_symbol parse_tree) 'return) (M_val_expression state (rest_of_statement parse_tree)))
-      ((eq? (first_symbol parse_tree) 'var) (M_state_statement (M_state_init state (rest_of_statement parse_tree)) (cdr parse_tree)))
-      ((eq? (first_symbol parse_tree) '=) (M_state_statement (M_state_assign state (rest_of_statement parse_tree)) (cdr parse_tree)))
-      ((eq? (first_symbol parse_tree) 'if) (M_state_statement (M_state_if state (rest_of_statement parse_tree)) (cdr parse_tree)))
-      ((eq? (first_symbol parse_tree) 'while) (M_state_statement (M_state_while state (first_statement parse_tree)) (cdr parse_tree)))
+      ((eq? (first_symbol parse_tree) 'var) (M_state_statement (M_state_init state (rest_of_statement parse_tree)) (next_stmt parse_tree)))
+      ((eq? (first_symbol parse_tree) '=) (M_state_statement (M_state_assign state (rest_of_statement parse_tree)) (next_stmt parse_tree)))
+      ((eq? (first_symbol parse_tree) 'if) (M_state_statement (M_state_if state (rest_of_statement parse_tree)) (next_stmt parse_tree)))
+      ((eq? (first_symbol parse_tree) 'while) (M_state_statement (M_state_while state (first_statement parse_tree)) (next_stmt parse_tree)))
     )))
+
+(define done?
+  (lambda (state)
+    (null? (cdr state))))
 
 (define M_state_init
   (lambda (state stmt)
@@ -32,12 +36,11 @@
     
 
    
-
+(define return_val car)
 (define first_statement car)
-(define first_var caar)
-(define first_var_val cadr)
 (define first_symbol caar)
 (define rest_of_statement cdar)
+(define next_stmt cdr)
 (define symbol car)
 (define assign_exp cdr)
               
@@ -51,9 +54,11 @@
       ((eq? (operator exp) '*) (* (M_val_expression state (operand1 exp)) (M_val_expression state (operand2 exp))))
       ((eq? (operator exp) '/) (quotient (M_val_expression state (operand1 exp)) (M_val_expression state (operand2 exp))))
       ((eq? (operator exp) '%) (remainder (M_val_expression state (operand1 exp)) (M_val_expression state (operand2 exp))))
-      ((list? (car exp)) (M_val_expression state (car exp)))
-      ((number? (car exp)) (car exp))
-      (else (get_val state (car exp))))))
+      ((list? (first_part_of_exp exp)) (M_val_expression state (first_part_of_exp exp)))
+      ((number? (first_part_of_exp exp)) (first_part_of_exp exp))
+      (else (get_val state (first_part_of_exp exp))))))
+
+(define first_part_of_exp car)
 
 (define operator car)
 
