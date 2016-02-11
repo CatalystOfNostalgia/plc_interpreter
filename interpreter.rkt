@@ -7,16 +7,23 @@
 (define M_state_statement
   (lambda (parse_tree state)
     (cond
-      ((eq? (first_symbol parse_tree) 'var) (M_state_statement (cdr parse_tree) (M_state_init (rest_of_statement parse_tree) state)))
-      ((eq? (first_symbol parse_tree) '=) (M_state_statement (cdr parse_tree) (M_state_assign (rest_of_statement parse_tree) state)))
-      ((eq? (first_symbol parse_tree) 'return) (M_val_expression (rest_of-statement) state)))
-      ((eq? (first_symbol parse_tree) 'if) (M_state_statement (cdr parse_tree) (M_state_if (rest_of_statement parse_tree) state)))
-      ((eq? (first_symbol parse_tree) 'while) (M_state_statement (cdr parse_tree) (M_state_while (rest_of_statement parse_tree) state)))))
+      ((eq? (first_symbol parse_tree) 'var) (M_state_statement (M_state_init state (rest_of_statement parse_tree)) (cdr parse_tree)))
+      ((eq? (first_symbol parse_tree) '=) (M_state_statement (M_state_assign state (rest_of_statement parse_tree)) (cdr parse_tree)))
+      ((eq? (first_symbol parse_tree) 'return) (M_val_expression state (rest_of-statement))))
+      ((eq? (first_symbol parse_tree) 'if) (M_state_statement (M_state_if state (rest_of_statement parse_tree)) (cdr parse_tree)))
+      ((eq? (first_symbol parse_tree) 'while) (M_state_statement (M_state_while state (first_statement parse_tree)) (cdr parse_tree)))))
 
+(define M_state_init
+  (lambda (stmt state)
+    (M_state_assign (initialize_variable state (symbol stmt)) (rest_of_statement stmt))))
+   
+
+(define first_statement car)
 (define first_var caar)
 (define first_var_val cadr)
 (define first_symbol caar)
-(define rest_of_statement cadr)
+(define rest_of_statement cdar)
+(define symbol car)
               
 (define mvalexp
   (lambda (exp)
