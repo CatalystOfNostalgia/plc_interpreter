@@ -43,3 +43,44 @@
       (if (mboolean cond state)
           (mstatewhile cond statement (mstatestatement statement state))
           state))))
+
+; Gets the value of a variable from a state 
+(define get_val
+  (lambda (state variable)
+    (cond
+      ((null? state) (error "No state was defined"))
+      ((null? (variables_from_state state)) (error "Variable not declared"))
+      ((and (eq? (next_var state) variable) (null? (next_val state))) (error "Variable not initialized"))
+      ((eq? (next_var state) variable) (next_val state))
+      (else (get_val (create_state (cdr (variables_from_state state)) (cdr (values_from_state state))) variable))))) 
+
+(define variables_from_state car)
+(define values_from_state cadr)
+
+(define next_var caar)
+(define next_val caadr) 
+; Creates a state from a list of vars and vals 
+(define create_state
+  (lambda (vars vals)
+    (cons vars (cons vals '()))))
+
+(define add_to_state
+  (lambda (state var val)
+    (create_state (append (variables_from_state state) (cons var ())) (append (values_from_state state) (cons val ())))))
+     
+(define initialize_variable
+  (lambda (state variable)
+    (cond
+      ((null? state) (error "No state was defined"))
+      ((null? (variables_from_state state)) (create_state (cons variable '()) '(()) ))
+      ((eq? (next_var state) variable) (error "Variable is already initialized"))
+      (else (add_to_state (initialize_variable (create_state (cdr (variables_from_state state)) (cdr (values_from_state state))) variable) (next_var state) (next_val state))))))
+
+(define assign
+  (lambda (state variable value)
+    (cond 
+      ((null? state) (error "No state wut?"))
+      ((null? (variables_from_state state)) (error "Variable not declared"))
+      ((eq? (next_var state) variable) (add_to_state (create_state (cdr (variables_from_state state)) (cdr (values_from_state state))) variable value))
+      (else (add_to_state (assign (create_state (cdr (variables_from_state state)) (cdr (values_from_state state))) variable value) (next_var state) (next_val state))))))
+  
