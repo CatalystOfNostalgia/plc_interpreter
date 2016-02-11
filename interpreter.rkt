@@ -66,12 +66,33 @@
 
 (define operand2 cddr)
 
-(define mstatewhile
-  (lambda (cond statement state)
+;parser gives us atom (while (<operator> <variable1> <variable2>) (statement))
+;after reading that atom#1 is a while, atom #2 and #3 along with the state get fed to this method
+;if the (<operator> <variable1> <variable2>) evaluates to true then we execute the statement on the state and call the while again passing in the new state
+;except <variable1> and <variable2> could actually be expressions themselves (such as * x x)
+;state will look like this ((<variable symbols>) (<variable values>))
+(define M_State_While 
+  (lambda (state condtn statement)
+    ;condtn is (<operator> <variable1> <variable2>)
     (cond
-      (if (mboolean cond state)
-          (mstatewhile cond statement (mstatestatement statement state))
-          state))))
+    ;  (if (mboolean cond state)
+    ;      (mstatewhile cond statement (mstatestatement statement state))
+    ;      state))))
+      )))
+
+(define M_Boolean ;at this level we assume these are two literal values
+  (lambda (condtn)
+    ;condtn is (<operator> <variable1> <variable2>) where comparison operator's are ==, !=, <, >, <=. >=
+    (cond
+      ((eq? (operator exp) '==) (eq? (mvalexp (operand1 exp)) (mvalexp (operand2 exp))))
+      ((eq? (operator exp) '!=) (- (mvalexp (operand1 exp)) (mvalexp (operand2 exp))))
+      ((eq? (operator exp) '<) (* (mvalexp (operand1 exp)) (mvalexp (operand2 exp))))
+      ((eq? (operator exp) '>) (> (mvalexp (operand1 exp)) (mvalexp (operand2 exp))))
+      ((eq? (operator exp) '<=) (<= (mvalexp (operand1 exp)) (mvalexp (operand2 exp))))
+      ((eq? (operator exp) '>=) (>= (mvalexp (operand1 exp)) (mvalexp (operand2 exp))))
+      ((list? (car exp)) (mvalexp (car exp)))
+      ((number? (car exp)) (car exp))
+      (else (error "bad stuff")))))
 
 ; Gets the value of a variable from a state 
 (define get_val
