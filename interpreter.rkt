@@ -7,6 +7,7 @@
 (define M_state_statement
   (lambda (state parse_tree)
     (cond
+      ((null? parse_tree) state)
       ((done? state) (return_val state))
       ((equal? (first_symbol parse_tree) 'return) (M_val_expression state (rest_of_statement parse_tree)))
       ((eq? (first_symbol parse_tree) 'var) (M_state_statement (M_state_init state (rest_of_statement parse_tree)) (next_stmt parse_tree)))
@@ -41,8 +42,8 @@
 (define M_state_if
   (lambda (state stmt)
     (cond
-      ((M_bool state (conditional stmt)) (M_state_statement state (then_statement stmt)))
-      ((has_optional stmt) (M_state_statement state (optional_statement stmt)))
+      ((M_bool state (conditional stmt)) (M_state_statement state (cons (then_statement stmt) '())))
+      ((has_optional stmt) (M_state_statement state (cons (optional_statement stmt) '())))
       (else state))))
 
 (define M_state_while
@@ -54,7 +55,7 @@
 (define optional_statement caddr)
 (define has_optional
   (lambda (l)
-    (null? (cddr l))))
+    (not (null? (cddr l)))))
 
 (define return_val car)
 (define first_statement car)
