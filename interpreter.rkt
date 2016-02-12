@@ -14,7 +14,6 @@
   (lambda (state parse_tree)
     (cond
       ((null? parse_tree) state)
-      ((done? state) (return_val state))
       ((equal? (first_symbol parse_tree) 'return) (get_sanitized_result state (return_exp parse_tree)))
       ((eq? (first_symbol parse_tree) 'var) (M_state_statement (M_state_init state (rest_of_statement parse_tree)) (next_stmt parse_tree)))
       ((eq? (first_symbol parse_tree) '=) (M_state_statement (M_state_assign state (rest_of_statement parse_tree)) (next_stmt parse_tree)))
@@ -107,11 +106,6 @@
       ((eq? (operator exp) '&&) (and (M_bool state (first_part_of_bool exp)) (M_bool state (second_part_of_bool exp))))
       ((eq? (operator exp) '!) (not (M_bool state (first_part_of_bool exp))))
       (else (M_val_expression state exp)))))
-
-; Checks if state is return vs actual state 
-(define done?
-  (lambda (state)
-    (null? (cdr state))))
 
 ; Determines whether "if" has an optional or not 
 (define has_optional
