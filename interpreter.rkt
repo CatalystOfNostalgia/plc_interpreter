@@ -137,12 +137,12 @@
 ; Gets the value of a variable from a state 
 (define get_val
   (lambda (state variable)
-    (cond(
+    (cond
       ((null? state) (error "No state was defined"))
       ((null? (variables_from_state state)) (error "Variable not declared"))
       ((and (eq? (next_var state) variable) (null? (next_val state))) (error "Variable not initialized"))
       ((eq? (next_var state) variable) (next_val state))
-      (else (get_val (create_state (cdr (variables_from_state state)) (cdr (values_from_state state))) variable))))) 
+      (else (get_val (create_state (cdr (variables_from_state state)) (cdr (values_from_state state))) variable)))))
 
 (define variables_from_state car)
 (define values_from_state cadr)
