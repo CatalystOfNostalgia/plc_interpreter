@@ -13,7 +13,7 @@
       ((eq? (first_symbol parse_tree) 'var) (M_state_statement (M_state_init state (rest_of_statement parse_tree)) (next_stmt parse_tree)))
       ((eq? (first_symbol parse_tree) '=) (M_state_statement (M_state_assign state (rest_of_statement parse_tree)) (next_stmt parse_tree)))
       ((eq? (first_symbol parse_tree) 'if) (M_state_statement (M_state_if state (rest_of_statement parse_tree)) (next_stmt parse_tree)))
-      ((eq? (first_symbol parse_tree) 'while) (M_state_statement (M_state_while state (first_statement parse_tree)) (next_stmt parse_tree)))
+      ((eq? (first_symbol parse_tree) 'while) (M_state_statement (M_state_while state (rest_of_statement parse_tree)) (next_stmt parse_tree)))
     )))
 
 (define done?
