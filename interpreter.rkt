@@ -40,13 +40,19 @@
 
 (define M_state_if
   (lambda (state stmt)
-    0))
-(define M_state_while
-  (lambda (state stmt)
-    0))
-    
+    (cond
+      ((M_bool state (conditional stmt)) (M_state_statement )
+    ))
 
-   
+(define M_state_while
+  (lambda (state stmt)       
+         ))
+    
+(define conditoinal car)
+(define has_optional
+  (lambda (l)
+    (null? (cddr l))))
+
 (define return_val car)
 (define first_statement car)
 (define first_symbol caar)
@@ -69,6 +75,28 @@
       ((number? (first_part_of_exp exp)) (first_part_of_exp exp))
       (else (get_val state (first_part_of_exp exp))))))
 
+(define M_bool
+  (lambda (state exp)
+    (cond
+      ((null? exp) '())
+      ((number? exp) exp)
+      ((eq? exp 'true) #t)
+      ((eq? exp 'false) #f)
+      ((not (list? exp)) (get_val state exp))
+      ((eq? (operator exp) '==) (eq? (M_bool state (first_part_of_bool exp)) (M_bool state (second_part_of_bool exp))))
+      ((eq? (operator exp) '!=) (not (eq? (M_bool state (first_part_of_bool exp)) (M_bool state (second_part_of_bool exp)))))
+      ((eq? (operator exp) '<) (< (M_bool state (first_part_of_bool exp)) (M_bool state (second_part_of_bool exp))))
+      ((eq? (operator exp) '>) (> (M_bool state (first_part_of_bool exp)) (M_bool state (second_part_of_bool exp))))
+      ((eq? (operator exp) '<=) (<= (M_bool state (first_part_of_bool exp)) (M_bool state (second_part_of_bool exp))))
+      ((eq? (operator exp) '>=) (>= (M_bool state (first_part_of_bool exp)) (M_bool state (second_part_of_bool exp))))
+      ((eq? (operator exp) '||) (or (M_bool state (first_part_of_bool exp)) (M_bool state (second_part_of_bool exp))))
+      ((eq? (operator exp) '&&) (and (M_bool state (first_part_of_bool exp)) (M_bool state (second_part_of_bool exp))))
+      ((eq? (operator exp) '!) (not (M_bool state (first_part_of_bool exp))))
+      (else (M_val_expression state exp)))))
+
+(define first_part_of_bool cadr)
+(define second_part_of_bool caddr)
+
 (define first_part_of_exp car)
 
 (define operator car)
@@ -77,12 +105,33 @@
 
 (define operand2 cddr)
 
-(define mstatewhile
-  (lambda (cond statement state)
+;parser gives us atom (while (<operator> <variable1> <variable2>) (statement))
+;after reading that atom#1 is a while, atom #2 and #3 along with the state get fed to this method
+;if the (<operator> <variable1> <variable2>) evaluates to true then we execute the statement on the state and call the while again passing in the new state
+;except <variable1> and <variable2> could actually be expressions themselves (such as * x x)
+;state will look like this ((<variable symbols>) (<variable values>))
+(define M_State_While 
+  (lambda (state condtn statement)
+    ;condtn is (<operator> <variable1> <variable2>)
     (cond
-      (if (mboolean cond state)
-          (mstatewhile cond statement (mstatestatement statement state))
-          state))))
+    ;  (if (mboolean cond state)
+    ;      (mstatewhile cond statement (mstatestatement statement state))
+    ;      state))))
+      )))
+
+(define M_Boolean ;at this level we assume these are two literal values
+  (lambda (condtn)
+    ;condtn is (<operator> <variable1> <variable2>) where comparison operator's are ==, !=, <, >, <=. >=
+    (cond
+      ((eq? (operator exp) '==) (eq? (mvalexp (operand1 exp)) (mvalexp (operand2 exp))))
+      ((eq? (operator exp) '!=) (- (mvalexp (operand1 exp)) (mvalexp (operand2 exp))))
+      ((eq? (operator exp) '<) (* (mvalexp (operand1 exp)) (mvalexp (operand2 exp))))
+      ((eq? (operator exp) '>) (> (mvalexp (operand1 exp)) (mvalexp (operand2 exp))))
+      ((eq? (operator exp) '<=) (<= (mvalexp (operand1 exp)) (mvalexp (operand2 exp))))
+      ((eq? (operator exp) '>=) (>= (mvalexp (operand1 exp)) (mvalexp (operand2 exp))))
+      ((list? (car exp)) (mvalexp (car exp)))
+      ((number? (car exp)) (car exp))
+      (else (error "bad stuff")))))
 
 ; Gets the value of a variable from a state 
 (define get_val
