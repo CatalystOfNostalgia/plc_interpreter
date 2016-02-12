@@ -1,9 +1,15 @@
+; PLC Project 1
+; Eric Luan
+; Steven Wendling
+; William Ordiway 
 (load "simpleParser.scm")
 
+; Interpret a file. 
 (define interpret
   (lambda (filename)
     (M_state_statement '(()()) (parser filename))))
 
+; The general M_state function. Handles return/var/=/if/while.  
 (define M_state_statement
   (lambda (state parse_tree)
     (cond
@@ -16,31 +22,19 @@
       ((eq? (first_symbol parse_tree) 'while) (M_state_statement (M_state_while state (rest_of_statement parse_tree)) (next_stmt parse_tree)))
     )))
 
-(define done?
-  (lambda (state)
-    (null? (cdr state))))
-
-(define get_sanitized_result
-  (lambda (state exp)
-    (sanitize (M_bool state exp))))
-
-(define sanitize
-  (lambda (val)
-    (cond
-      ((eq? val #t) 'true)
-      ((eq? val #f) 'false)
-      (else val))))
-
+; Handles M_state of an init statement 
 (define M_state_init
   (lambda (state stmt)
     (M_state_assign (initialize_variable state (symbol stmt)) stmt)))
 
+; Handles M_state of an assign statement 
 (define M_state_assign
   (lambda (state stmt)
     (if (null? (cdr stmt))
         (assign state (symbol stmt) '())
         (assign state (symbol stmt) (M_bool state (cadr stmt))))))
 
+; Handles M_state of an if statement 
 (define M_state_if
   (lambda (state stmt)
     (cond
@@ -48,28 +42,34 @@
       ((has_optional stmt) (M_state_statement state (cons (optional_statement stmt) '())))
       (else state))))
 
-;(define M_state_while
-;  (lambda (state stmt)
-;    0))
-;defined below, I had called it "M_State_While" but have renamed it to this.
-;once I know my whiles work this can be safetly deleted. My code wears this codes skin, no one is any wiser.
-    
-(define conditional car)
-(define then_statement cadr)
-(define optional_statement caddr)
-(define has_optional
-  (lambda (l)
-    (not (null? (cddr l)))))
+; the statement is the car of the parse tree cleansed of the leading "while" designator
+; meaning ((<bool_operator> <expression1> <expression2>) (<operation>))
+(define M_state_while 
+  (lambda (state statement)
+    (cond
+      ((null? (conditional statement)) (error "No boolean expression was defined"))
+      ((number? (M_bool state (conditional statement))) (error "while statement evaluating a number instead of boolean expression. OOPS")) ; M_bool MAY return a number as part of its operation, but shouldn't unless we made a mistake on our part 
+      ((M_bool state (conditional statement)) ;if the while boolean operation (<bool_operator> <expression1> <expression2>) is true
+       (M_state_while (M_state_statement state (cons (then_statement statement) '())) statement)) ; we need recurse on a state changed by the statement
+      (else state) ; the M_bool returned false so we don't apply the statement to the state we simply pass up the state
+      )))
 
-(define return_val car)
-(define first_statement car)
-(define first_symbol caar)
-(define rest_of_statement cdar)
-(define next_stmt cdr)
-(define symbol car)
-(define assign_exp cdr)
-(define return_exp cadar)
-              
+; Handles M_state for a return 
+; Sanitizes #t and #f to true/false respectively. 
+(define get_sanitized_result
+  (lambda (state exp)
+    (sanitize (M_bool state exp))))
+
+; Handles returning and special return for #t and #f 
+(define sanitize
+  (lambda (val)
+    (cond
+      ((eq? val #t) 'true)
+      ((eq? val #f) 'false)
+      (else val))))
+
+; Handles M_value. 
+; Does +/-/*/"/"/%
 (define M_val_expression
   (lambda (state exp)
     (cond
@@ -86,10 +86,7 @@
       ((number? (first_part_of_exp exp)) (first_part_of_exp exp))
       (else (get_val state (first_part_of_exp exp))))))
 
-(define unary?
-  (lambda (exp)
-    (null? (cddr exp))))
-; M_bool can also do mathematical expressions.
+; M_bool handles returning booleans. It can also evaluate mathematical expressions. 
 ; The reason for this is because of == and !=
 ; Our implementation allows <bool> == <bool> or <math> == <math>
 (define M_bool
@@ -111,28 +108,40 @@
       ((eq? (operator exp) '!) (not (M_bool state (first_part_of_bool exp))))
       (else (M_val_expression state exp)))))
 
+; Checks if state is return vs actual state 
+(define done?
+  (lambda (state)
+    (null? (cdr state))))
+
+; Determines whether "if" has an optional or not 
+(define has_optional
+  (lambda (l)
+    (not (null? (cddr l)))))
+
+; Checks between unary - vs operational - 
+(define unary?
+  (lambda (exp)
+    (null? (cddr exp))))
+
+(define conditional car)
+(define then_statement cadr)
+(define optional_statement caddr)
+(define return_val car)
+(define first_statement car)
+(define first_symbol caar)
+(define rest_of_statement cdar)
+(define next_stmt cdr)
+(define symbol car)
+(define assign_exp cdr)
+(define return_exp cadar)
 (define first_part_of_bool cadr)
 (define second_part_of_bool caddr)
-
 (define first_part_of_exp car)
-
 (define operator car)
-
 (define operand1 cdr)
-
 (define operand2 cddr)
 
-; the statement is the car of the parse tree cleansed of the leading "while" designator
-; meaning ((<bool_operator> <expression1> <expression2>) (<operation>))
-(define M_state_while 
-  (lambda (state statement)
-    (cond
-      ((null? (conditional statement)) (error "No boolean expression was defined"))
-      ((number? (M_bool state (conditional statement))) (error "while statement evaluating a number instead of boolean expression. OOPS")) ; M_bool MAY return a number as part of its operation, but shouldn't unless we made a mistake on our part 
-      ((M_bool state (conditional statement)) ;if the while boolean operation (<bool_operator> <expression1> <expression2>) is true
-       (M_state_while (M_state_statement state (cons (then_statement statement) '())) statement)) ; we need recurse on a state changed by the statement
-      (else state) ; the M_bool returned false so we don't apply the statement to the state we simply pass up the state
-      )))
+; State operations below 
 
 ; Gets the value of a variable from a state 
 (define get_val
@@ -144,20 +153,17 @@
       ((eq? (next_var state) variable) (next_val state))
       (else (get_val (create_state (cdr (variables_from_state state)) (cdr (values_from_state state))) variable)))))
 
-(define variables_from_state car)
-(define values_from_state cadr)
-
-(define next_var caar)
-(define next_val caadr) 
 ; Creates a state from a list of vars and vals 
 (define create_state
   (lambda (vars vals)
     (cons vars (cons vals '()))))
 
+; Adds a var/val pair to a state and returns the new state 
 (define add_to_state
   (lambda (state var val)
     (create_state (append (variables_from_state state) (cons var ())) (append (values_from_state state) (cons val ())))))
      
+; Initializes a variable in the state and returns the new state 
 (define initialize_variable
   (lambda (state variable)
     (cond
@@ -166,6 +172,7 @@
       ((eq? (next_var state) variable) (error "Variable is already initialized"))
       (else (add_to_state (initialize_variable (create_state (cdr (variables_from_state state)) (cdr (values_from_state state))) variable) (next_var state) (next_val state))))))
 
+; Assigns a value to a variable in a state and returns the new state 
 (define assign
   (lambda (state variable value)
     (cond 
@@ -173,4 +180,10 @@
       ((null? (variables_from_state state)) (error "Variable not declared"))
       ((eq? (next_var state) variable) (add_to_state (create_state (cdr (variables_from_state state)) (cdr (values_from_state state))) variable value))
       (else (add_to_state (assign (create_state (cdr (variables_from_state state)) (cdr (values_from_state state))) variable value) (next_var state) (next_val state))))))
-  
+
+(define variables_from_state car)
+(define values_from_state cadr)
+(define next_var caar)
+(define next_val caadr) 
+
+
