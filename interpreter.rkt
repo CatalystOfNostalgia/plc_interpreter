@@ -9,7 +9,7 @@
     (cond
       ((null? parse_tree) state)
       ((done? state) (return_val state))
-      ((equal? (first_symbol parse_tree) 'return) (M_bool state (return_exp parse_tree)))
+      ((equal? (first_symbol parse_tree) 'return) (get_sanitized_result state (rest_of_statement parse_tree)))
       ((eq? (first_symbol parse_tree) 'var) (M_state_statement (M_state_init state (rest_of_statement parse_tree)) (next_stmt parse_tree)))
       ((eq? (first_symbol parse_tree) '=) (M_state_statement (M_state_assign state (rest_of_statement parse_tree)) (next_stmt parse_tree)))
       ((eq? (first_symbol parse_tree) 'if) (M_state_statement (M_state_if state (rest_of_statement parse_tree)) (next_stmt parse_tree)))
