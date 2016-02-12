@@ -58,6 +58,20 @@
       ((number? (first_part_of_exp exp)) (first_part_of_exp exp))
       (else (get_val state (first_part_of_exp exp))))))
 
+(define M_bool
+  (lambda (state exp)
+    (cond
+      ((null? exp) ())
+      ((eq? (operator exp) '==) (eq? (M_bool state (operand1 exp)) (M_bool state (operand2 exp))))
+      ((eq? (operator exp) '<) (< (M_bool state (operand1 exp)) (M_bool state (operand2 exp))))
+      ((eq? (operator exp) '>) (> (M_bool state (operand1 exp)) (M_bool state (operand2 exp))))
+      ((eq? (operator exp) '<=) (<= (M_bool state (operand1 exp)) (M_bool state (operand2 exp))))
+      ((eq? (operator exp) '>=) (>= (M_bool state (operand1 exp)) (M_bool state (operand2 exp))))
+      ((eq? (operator exp) '||) (or (M_bool state (operand1 exp)) (M_bool state (operand2 exp))))
+      ((eq? (operator exp) '&&) (and (M_bool state (operand1 exp)) (M_bool state (operand2 exp))))
+      ((eq? (operator exp) '!) (not (M_bool state (operatnd1 exp))))
+      (else (M_val_expression state exp)))))
+
 (define first_part_of_exp car)
 
 (define operator car)
