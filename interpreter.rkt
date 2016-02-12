@@ -19,13 +19,24 @@
   (lambda (state)
     (null? (cdr state))))
 
+(define get_sanitized_result
+  (lambda (state exp)
+    (sanitize state (M_bool state exp))))
+
+(define sanitize
+  (lambda (val)
+    (cond
+      ((eq? val #t) 'true)
+      ((eq? val #f) 'false)
+      (else val))))
+
 (define M_state_init
   (lambda (state stmt)
     (M_state_assign (initialize_variable state (symbol stmt)) stmt)))
 
 (define M_state_assign
   (lambda (state stmt)
-    (assign state (symbol stmt) (M_val_expression state (assign_exp stmt)))))
+    (assign state (symbol stmt) (M_bool state (assign_exp stmt)))))
 
 (define M_state_if
   (lambda (state stmt)
