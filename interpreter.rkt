@@ -48,9 +48,11 @@
       ((has_optional stmt) (M_state_statement state (cons (optional_statement stmt) '())))
       (else state))))
 
-(define M_state_while
-  (lambda (state stmt)
-    0))
+;(define M_state_while
+;  (lambda (state stmt)
+;    0))
+;defined below, I had called it "M_State_While" but have renamed it to this.
+;once I know my whiles work this can be safetly deleted. My code wears this codes skin, no one is any wiser.
     
 (define conditional car)
 (define then_statement cadr)
@@ -120,24 +122,22 @@
 
 (define operand2 cddr)
 
-;parser gives us atom (while (<operator> <variable1> <variable2>) (statement))
-;after reading that atom#1 is a while, atom #2 and #3 along with the state get fed to this method
-;if the (<operator> <variable1> <variable2>) evaluates to true then we execute the statement on the state and call the while again passing in the new state
-;except <variable1> and <variable2> could actually be expressions themselves (such as * x x)
-;state will look like this ((<variable symbols>) (<variable values>))
-(define M_State_While 
-  (lambda (state condtn statement)
-    ;condtn is (<operator> <variable1> <variable2>)
+; the statement is the car of the parse tree cleansed of the leading "while" designator
+; meaning ((<bool_operator> <expression1> <expression2>) (<operation>))
+(define M_state_while 
+  (lambda (state statement)
     (cond
-    ;  (if (mboolean cond state)
-    ;      (mstatewhile cond statement (mstatestatement statement state))
-    ;      state))))
+      ((null? (conditional statement)) (error "No boolean expression was defined"))
+      ((number? (M_bool state (conditional statement))) (error "while statement evaluating a number instead of boolean expression. OOPS")) ; M_bool MAY return a number as part of its operation, but shouldn't unless we made a mistake on our part 
+      ((M_bool state (conditional statement)) ;if the while boolean operation (<bool_operator> <expression1> <expression2>) is true
+       (M_state_while (M_state_statement state (cons (then_statement statement) '())) statement)) ; we need recurse on a state changed by the statement
+      (else state) ; the M_bool returned false so we don't apply the statement to the state we simply pass up the state
       )))
 
 ; Gets the value of a variable from a state 
 (define get_val
   (lambda (state variable)
-    (cond
+    (cond(
       ((null? state) (error "No state was defined"))
       ((null? (variables_from_state state)) (error "Variable not declared"))
       ((and (eq? (next_var state) variable) (null? (next_val state))) (error "Variable not initialized"))
