@@ -62,6 +62,8 @@
   (lambda (state exp)
     (cond
       ((null? exp) ())
+      ((eq? (operator exp) 'true) #t)
+      ((eq? (operator exp) 'false) #f)
       ((eq? (operator exp) '==) (eq? (M_bool state (operand1 exp)) (M_bool state (operand2 exp))))
       ((eq? (operator exp) '<) (< (M_bool state (operand1 exp)) (M_bool state (operand2 exp))))
       ((eq? (operator exp) '>) (> (M_bool state (operand1 exp)) (M_bool state (operand2 exp))))
