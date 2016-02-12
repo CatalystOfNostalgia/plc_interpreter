@@ -41,14 +41,17 @@
 (define M_state_if
   (lambda (state stmt)
     (cond
-      ((M_bool state (conditional stmt)) (M_state_statement )
-    ))
+      ((M_bool state (conditional stmt)) (M_state_statement state (then_statement stmt)))
+      ((has_optional stmt) (M_state_statement state (optional_statement stmt)))
+      (else state))))
 
 (define M_state_while
-  (lambda (state stmt)       
-         ))
+  (lambda (state stmt)
+    0))
     
-(define conditoinal car)
+(define conditional car)
+(define then_statement cadr)
+(define optional_statement caddr)
 (define has_optional
   (lambda (l)
     (null? (cddr l))))
@@ -75,6 +78,9 @@
       ((number? (first_part_of_exp exp)) (first_part_of_exp exp))
       (else (get_val state (first_part_of_exp exp))))))
 
+; M_bool can also do mathematical expressions.
+; The reason for this is because of == and !=
+; Our implementation allows <bool> == <bool> or <math> == <math>
 (define M_bool
   (lambda (state exp)
     (cond
