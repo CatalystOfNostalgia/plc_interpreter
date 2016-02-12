@@ -29,13 +29,19 @@
 
 (define M_state_if
   (lambda (state stmt)
-    0))
-(define M_state_while
-  (lambda (state stmt)
-    0))
-    
+    (cond
+      ((M_bool state (conditional stmt)) (M_state_statement )
+    ))
 
-   
+(define M_state_while
+  (lambda (state stmt)       
+         ))
+    
+(define conditoinal car)
+(define has_optional
+  (lambda (l)
+    (null? (cddr l))))
+
 (define return_val car)
 (define first_statement car)
 (define first_symbol caar)
@@ -61,18 +67,24 @@
 (define M_bool
   (lambda (state exp)
     (cond
-      ((null? exp) ())
-      ((eq? (operator exp) 'true) #t)
-      ((eq? (operator exp) 'false) #f)
-      ((eq? (operator exp) '==) (eq? (M_bool state (operand1 exp)) (M_bool state (operand2 exp))))
-      ((eq? (operator exp) '<) (< (M_bool state (operand1 exp)) (M_bool state (operand2 exp))))
-      ((eq? (operator exp) '>) (> (M_bool state (operand1 exp)) (M_bool state (operand2 exp))))
-      ((eq? (operator exp) '<=) (<= (M_bool state (operand1 exp)) (M_bool state (operand2 exp))))
-      ((eq? (operator exp) '>=) (>= (M_bool state (operand1 exp)) (M_bool state (operand2 exp))))
-      ((eq? (operator exp) '||) (or (M_bool state (operand1 exp)) (M_bool state (operand2 exp))))
-      ((eq? (operator exp) '&&) (and (M_bool state (operand1 exp)) (M_bool state (operand2 exp))))
-      ((eq? (operator exp) '!) (not (M_bool state (operatnd1 exp))))
+      ((null? exp) '())
+      ((number? exp) exp)
+      ((eq? exp 'true) #t)
+      ((eq? exp 'false) #f)
+      ((not (list? exp)) (get_val state exp))
+      ((eq? (operator exp) '==) (eq? (M_bool state (first_part_of_bool exp)) (M_bool state (second_part_of_bool exp))))
+      ((eq? (operator exp) '!=) (not (eq? (M_bool state (first_part_of_bool exp)) (M_bool state (second_part_of_bool exp)))))
+      ((eq? (operator exp) '<) (< (M_bool state (first_part_of_bool exp)) (M_bool state (second_part_of_bool exp))))
+      ((eq? (operator exp) '>) (> (M_bool state (first_part_of_bool exp)) (M_bool state (second_part_of_bool exp))))
+      ((eq? (operator exp) '<=) (<= (M_bool state (first_part_of_bool exp)) (M_bool state (second_part_of_bool exp))))
+      ((eq? (operator exp) '>=) (>= (M_bool state (first_part_of_bool exp)) (M_bool state (second_part_of_bool exp))))
+      ((eq? (operator exp) '||) (or (M_bool state (first_part_of_bool exp)) (M_bool state (second_part_of_bool exp))))
+      ((eq? (operator exp) '&&) (and (M_bool state (first_part_of_bool exp)) (M_bool state (second_part_of_bool exp))))
+      ((eq? (operator exp) '!) (not (M_bool state (first_part_of_bool exp))))
       (else (M_val_expression state exp)))))
+
+(define first_part_of_bool cadr)
+(define second_part_of_bool caddr)
 
 (define first_part_of_exp car)
 
