@@ -9,7 +9,7 @@
     (cond
       ((null? parse_tree) state)
       ((done? state) (return_val state))
-      ((equal? (first_symbol parse_tree) 'return) (M_val_expression state (rest_of_statement parse_tree)))
+      ((equal? (first_symbol parse_tree) 'return) (M_bool state (return_exp parse_tree)))
       ((eq? (first_symbol parse_tree) 'var) (M_state_statement (M_state_init state (rest_of_statement parse_tree)) (next_stmt parse_tree)))
       ((eq? (first_symbol parse_tree) '=) (M_state_statement (M_state_assign state (rest_of_statement parse_tree)) (next_stmt parse_tree)))
       ((eq? (first_symbol parse_tree) 'if) (M_state_statement (M_state_if state (rest_of_statement parse_tree)) (next_stmt parse_tree)))
@@ -64,6 +64,7 @@
 (define next_stmt cdr)
 (define symbol car)
 (define assign_exp cdr)
+(define return_exp cadar)
               
 (define M_val_expression
   (lambda (state exp)
@@ -71,7 +72,9 @@
       ((null? exp) '())
       ((number? exp) exp)
       ((eq? (operator exp) '+) (+ (M_val_expression state (operand1 exp)) (M_val_expression state (operand2 exp))))
-      ((eq? (operator exp) '-) (- (M_val_expression state (operand1 exp)) (M_val_expression state (operand2 exp))))
+      ((eq? (operator exp) '-) (if (unary? exp)
+                                   (- 0 (M_val_expression state (operand1 exp)))
+                                   (- (M_val_expression state (operand1 exp)) (M_val_expression state (operand2 exp)))))
       ((eq? (operator exp) '*) (* (M_val_expression state (operand1 exp)) (M_val_expression state (operand2 exp))))
       ((eq? (operator exp) '/) (quotient (M_val_expression state (operand1 exp)) (M_val_expression state (operand2 exp))))
       ((eq? (operator exp) '%) (remainder (M_val_expression state (operand1 exp)) (M_val_expression state (operand2 exp))))
@@ -79,6 +82,9 @@
       ((number? (first_part_of_exp exp)) (first_part_of_exp exp))
       (else (get_val state (first_part_of_exp exp))))))
 
+(define unary?
+  (lambda (exp)
+    (null? (cddr exp))))
 ; M_bool can also do mathematical expressions.
 ; The reason for this is because of == and !=
 ; Our implementation allows <bool> == <bool> or <math> == <math>
@@ -125,20 +131,6 @@
     ;      (mstatewhile cond statement (mstatestatement statement state))
     ;      state))))
       )))
-
-(define M_Boolean ;at this level we assume these are two literal values
-  (lambda (condtn)
-    ;condtn is (<operator> <variable1> <variable2>) where comparison operator's are ==, !=, <, >, <=. >=
-    (cond
-      ((eq? (operator exp) '==) (eq? (mvalexp (operand1 exp)) (mvalexp (operand2 exp))))
-      ((eq? (operator exp) '!=) (- (mvalexp (operand1 exp)) (mvalexp (operand2 exp))))
-      ((eq? (operator exp) '<) (* (mvalexp (operand1 exp)) (mvalexp (operand2 exp))))
-      ((eq? (operator exp) '>) (> (mvalexp (operand1 exp)) (mvalexp (operand2 exp))))
-      ((eq? (operator exp) '<=) (<= (mvalexp (operand1 exp)) (mvalexp (operand2 exp))))
-      ((eq? (operator exp) '>=) (>= (mvalexp (operand1 exp)) (mvalexp (operand2 exp))))
-      ((list? (car exp)) (mvalexp (car exp)))
-      ((number? (car exp)) (car exp))
-      (else (error "bad stuff")))))
 
 ; Gets the value of a variable from a state 
 (define get_val
