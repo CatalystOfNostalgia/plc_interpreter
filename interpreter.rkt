@@ -169,7 +169,7 @@
     (cond
       ((null? state) (error "No state was defined"))
       ((null? (variables_from_state state)) (create_state (cons variable '()) '(()) ))
-      ((eq? (next_var state) variable) (error "Variable is already initialized"))
+      ((eq? (next_var state) variable) (error "Variable is already declared"))
       (else (add_to_state (initialize_variable (create_state (cdr (variables_from_state state)) (cdr (values_from_state state))) variable) (next_var state) (next_val state))))))
 
 ; Assigns a value to a variable in a state and returns the new state 
