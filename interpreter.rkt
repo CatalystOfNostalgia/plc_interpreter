@@ -7,18 +7,29 @@
 ; Interpret a file. 
 (define interpret
   (lambda (filename)
-    (M_state_statement '(()()) (parser filename))))
+    (call/cc
+     (lambda (return)
+       (M_state_statement '(()()) (parser filename) return '() '())))))
 
 ; The general M_state function. Handles return/var/=/if/while.  
 (define M_state_statement
-  (lambda (state parse_tree)
+  (lambda (state parse_tree return break continue)
     (cond
       ((null? parse_tree) state)
-      ((equal? (first_symbol parse_tree) 'return) (get_sanitized_result state (return_exp parse_tree)))
-      ((eq? (first_symbol parse_tree) 'var) (M_state_statement (M_state_init state (rest_of_statement parse_tree)) (next_stmt parse_tree)))
-      ((eq? (first_symbol parse_tree) '=) (M_state_statement (M_state_assign state (rest_of_statement parse_tree)) (next_stmt parse_tree)))
-      ((eq? (first_symbol parse_tree) 'if) (M_state_statement (M_state_if state (rest_of_statement parse_tree)) (next_stmt parse_tree)))
-      ((eq? (first_symbol parse_tree) 'while) (M_state_statement (M_state_while state (rest_of_statement parse_tree)) (next_stmt parse_tree)))
+      ((equal? (first_symbol parse_tree) 'return) (return (get_sanitized_result state (return_exp parse_tree))))
+      ((eq? (first_symbol parse_tree) 'break) (break state))
+      ((eq? (first_symbol parse_tree) 'continue) (continue state))
+      ((eq? (first_symbol parse_tree) 'begin) (M_state_statement
+                                               (M_state_statement
+                                                state
+                                                (strip_symbol parse_tree return)
+                                                return break continue)
+                                              (next_stmt parse_tree)
+                                              return break continue))
+      ((eq? (first_symbol parse_tree) 'var) (M_state_statement (M_state_init state (rest_of_statement parse_tree)) (next_stmt parse_tree) return break continue))
+      ((eq? (first_symbol parse_tree) '=) (M_state_statement (M_state_assign state (rest_of_statement parse_tree)) (next_stmt parse_tree) return break continue))
+      ((eq? (first_symbol parse_tree) 'if) (M_state_statement (M_state_if state (rest_of_statement parse_tree) return break continue) (next_stmt parse_tree) return break continue))
+      ((eq? (first_symbol parse_tree) 'while) (M_state_statement (M_state_while state (rest_of_statement parse_tree) return break continue) (next_stmt parse_tree) return break continue))
     )))
 
 ; Handles M_state of an init statement 
@@ -66,6 +77,10 @@
       ((eq? val #t) 'true)
       ((eq? val #f) 'false)
       (else val))))
+
+(define strip_symbol
+  (lambda (parse_tree break)
+    (cdar parse_tree)))
 
 ; Handles M_value. 
 ; Does +/-/*/"/"/%
