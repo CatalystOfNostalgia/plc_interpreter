@@ -1,4 +1,4 @@
-; PLC Project 1
+; PLC Project 2
 ; Eric Luan
 ; Steven Wendling
 ; William Ordiway 
@@ -29,7 +29,7 @@
 ; Handles M_state of an assign statement 
 (define M_state_assign
   (lambda (state stmt)
-    (if (null? (cdr stmt))
+    (if (null? (assign_exp stmt))
         (assign state (symbol stmt) '())
         (assign state (symbol stmt) (M_bool state (cadr stmt))))))
 
