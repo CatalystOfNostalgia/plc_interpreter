@@ -7,7 +7,7 @@
 ; Interpret a file. 
 (define interpret
   (lambda (filename)
-    (M_state_statement '(()()) (parser filename))))
+    (M_state_statement (new_state) (parser filename))))
 
 ; The general M_state function. Handles return/var/=/if/while.  
 (define M_state_statement
@@ -135,49 +135,120 @@
 (define operand1 cdr)
 (define operand2 cddr)
 
-; State operations below 
+; State operations below
 
-; Gets the value of a variable from a state 
+; Removes the top state layer and returns the rest of the states 
+(define pop_last_state
+  (lambda (states)
+    (cond
+      ((null? states) (error "No state was given"))
+      (else (rest_of_states states)))))
+
+; Add a new state layer with this list of variables and list of values 
+(define push_new_state
+  (lambda (vars vals states)
+    (cons (create_state vars vals) states)))
+
+; Adds an existing state as the next layer on the states
+(define push_state
+  (lambda (state states)
+    (cons state states)))
+
+; Get val takes the list of states and finds the variable in it 
 (define get_val
+  (lambda (states variable)
+    (cond
+      ((null? states) (error "Variable not declared"))
+      ((check_var_initialized_in_state variable (first_layer states)) (get_val_state (first_layer states) variable))
+      (else (get_val (rest_of_states states) variable)))))
+
+
+; Gets the value of a variable from a state state 
+(define get_val_state
   (lambda (state variable)
     (cond
-      ((null? state) (error "No state was defined"))
+      ((null? state) (error "Variable not declared"))
       ((null? (variables_from_state state)) (error "Variable not declared"))
       ((and (eq? (next_var state) variable) (null? (next_val state))) (error "Variable not initialized"))
       ((eq? (next_var state) variable) (next_val state))
-      (else (get_val (create_state (cdr (variables_from_state state)) (cdr (values_from_state state))) variable)))))
+      (else (get_val_state (create_state (cdr (variables_from_state state)) (cdr (values_from_state state))) variable)))))
 
 ; Creates a state from a list of vars and vals 
 (define create_state
   (lambda (vars vals)
     (cons vars (cons vals '()))))
-
-; Adds a var/val pair to a state and returns the new state 
+ 
+; Adds a var/val pair to  state and returns the new state 
 (define add_to_state
   (lambda (state var val)
     (create_state (append (variables_from_state state) (cons var ())) (append (values_from_state state) (cons val ())))))
      
-; Initializes a variable in the state and returns the new state 
-(define initialize_variable
+; Initializes a variable in one of the layer 
+(define initialize_variable_in_state
   (lambda (state variable)
     (cond
       ((null? state) (error "No state was defined"))
       ((null? (variables_from_state state)) (create_state (cons variable '()) '(()) ))
       ((eq? (next_var state) variable) (error "Variable is already declared"))
-      (else (add_to_state (initialize_variable (create_state (cdr (variables_from_state state)) (cdr (values_from_state state))) variable) (next_var state) (next_val state))))))
+      (else (add_to_state (initialize_variable_in_state (create_state (cdr (variables_from_state state)) (cdr (values_from_state state))) variable) (next_var state) (next_val state))))))
 
-; Assigns a value to a variable in a state and returns the new state 
+; Initializes a variable in the first layer of all of the states 
+(define initialize_variable
+  (lambda (states variable)
+    (if (check_var_initialized variable states)
+        (error "Variable already declared")
+        (push_state (initialize_variable_in_state (first_layer states) variable) (rest_of_states states)))))
+
+; Assign
 (define assign
+  (lambda (states variable value)
+    (assign_cps states variable value (lambda (v) v))))
+
+; Assigns a value to a variable in the states
+(define assign_state
   (lambda (state variable value)
     (cond 
       ((null? state) (error "No state wut?"))
       ((null? (variables_from_state state)) (error "Variable not declared"))
       ((eq? (next_var state) variable) (add_to_state (create_state (cdr (variables_from_state state)) (cdr (values_from_state state))) variable value))
-      (else (add_to_state (assign (create_state (cdr (variables_from_state state)) (cdr (values_from_state state))) variable value) (next_var state) (next_val state))))))
+      (else (add_to_state (assign_state (create_state (cdr (variables_from_state state)) (cdr (values_from_state state))) variable value) (next_var state) (next_val state))))))
 
+; Assigns a value to a variable in the appropriate state 
+(define assign_cps
+  (lambda (states variable value return)
+    (cond
+      ((null? states) (error "Variable not declared"))
+      ((check_var_initialized_in_state variable (first_layer states)) (return (cons (assign_state (first_layer states) variable value) (rest_of_states states))))
+      (else (assign_cps (rest_of_states states) variable value (lambda (v)
+                                                                 (return (cons (first_layer states) v))))))))
+                                                             
+; Returns true if the variable has already been initialized in any layer, otherwise false. 
+(define check_var_initialized
+  (lambda (var states)
+    (cond
+      ((null? states) #f)
+      ((null? rest_of_states) (check_var_initialized_in_state var (first_layer states)))
+      (else (or (check_var_initialized var (rest_of_states states)) (check_var_initialized_in_state var (first_layer states)))))))
+
+; Returns true if the variable is initialized in this state 
+(define check_var_initialized_in_state
+  (lambda (var state)
+    (cond
+      ((null? (variables_from_state state)) #f)
+      ((eq? (next_var state) var) #t)
+      (else (check_var_initialized_in_state var (remove_first_from_state state))))))
+                                            
+; Remove the first var/val pair from a state and returns that state                                                                              
+(define remove_first_from_state
+  (lambda (state)
+    (cons (rest_of_variables state) (cons (rest_of_values state) '()))))
+
+(define rest_of_variables cdar)
+(define rest_of_values cdadr)
 (define variables_from_state car)
 (define values_from_state cadr)
 (define next_var caar)
-(define next_val caadr) 
-
-
+(define next_val caadr)
+(define new_state '((()())))
+(define rest_of_states cdr)
+(define first_layer car)
