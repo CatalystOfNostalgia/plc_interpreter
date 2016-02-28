@@ -7,13 +7,9 @@
 ; Interpret a file. 
 (define interpret
   (lambda (filename)
-<<<<<<< HEAD
-    (M_state_statement (new_state) (parser filename))))
-=======
     (call/cc
      (lambda (return)
-       (M_state_statement '(()()) (parser filename) return '() '())))))
->>>>>>> e86ba37b132265185267eeb74706511e10a0f810
+       (M_state_statement (new_state) (parser filename) return '() '())))))
 
 ; The general M_state function. Handles return/var/=/if/while.  
 (define M_state_statement
