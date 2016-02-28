@@ -45,12 +45,17 @@
 ; meaning ((<bool_operator> <expression1> <expression2>) (<operation>))
 (define M_state_while 
   (lambda (state statement)
-    (cond
-      ((null? (conditional statement)) (error "No boolean expression was defined"))
-      ((number? (M_bool state (conditional statement))) (error "while statement evaluating a number instead of boolean expression. OOPS")) ; M_bool MAY return a number as part of its operation, but shouldn't unless we made a mistake on our part 
-      ((M_bool state (conditional statement)) ;if the while boolean operation (<bool_operator> <expression1> <expression2>) is true
-       (M_state_while (M_state_statement state (cons (then_statement statement) '())) statement)) ; we need recurse on a state changed by the statement
-      (else state) ; the M_bool returned false so we don't apply the statement to the state we simply pass up the state
+    (call/cc
+     (lambda (break)
+       (cond
+         ((null? (conditional statement)) (error "No boolean expression was defined"))
+         ((number? (M_bool state (conditional statement))) (error "while statement evaluating a number instead of boolean expression. OOPS")) ; M_bool MAY return a number as part of its operation, but shouldn't unless we made a mistake on our part
+         ((M_bool state (conditional statement)) ;if the while boolean operation (<bool_operator> <expression1> <expression2>) is true
+          (M_state_while (M_state_statement state (cons (then_statement statement) '())) statement)) ; we need recurse on a state changed by the statement
+              ; statement may now consist of a code block now, e.x. (begin (= x (- x 1)) (break) (= x (+ x 100)))
+              ; only operations leading up to the break should be executed, at the break the while loop ceases to matter
+              ; 
+         (else state) ; the M_bool returned false so we don't apply the statement to the state we simply pass up the state
       )))
 
 ; Handles M_state for a return 
