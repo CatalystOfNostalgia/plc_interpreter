@@ -16,13 +16,13 @@
   (lambda (state parse_tree return break continue)
     (cond
       ((null? parse_tree) state)
-      ((equal? (first_symbol parse_tree) 'return) (return (get_sanitized_result state (return_exp parse_tree))))
+      ((equal? (first_symbol parse_tree) 'return) (get_sanitized_result state (return_exp parse_tree)))
       ((eq? (first_symbol parse_tree) 'break) (break state))
       ((eq? (first_symbol parse_tree) 'continue) (continue state))
       ((eq? (first_symbol parse_tree) 'begin) (M_state_statement
                                                (M_state_statement
                                                 state
-                                                (strip_symbol parse_tree return)
+                                                (strip_symbol parse_tree)
                                                 return break continue)
                                               (next_stmt parse_tree)
                                               return break continue))
@@ -46,21 +46,21 @@
 
 ; Handles M_state of an if statement 
 (define M_state_if
-  (lambda (state stmt)
+  (lambda (state stmt return break continue)
     (cond
-      ((M_bool state (conditional stmt)) (M_state_statement state (cons (then_statement stmt) '())))
-      ((has_optional stmt) (M_state_statement state (cons (optional_statement stmt) '())))
+      ((M_bool state (conditional stmt)) (M_state_statement state (cons (then_statement stmt) '()) return break continue))
+      ((has_optional stmt) (M_state_statement state (cons (optional_statement stmt) '()) return break continue))
       (else state))))
 
 ; the statement is the car of the parse tree cleansed of the leading "while" designator
 ; meaning ((<bool_operator> <expression1> <expression2>) (<operation>))
 (define M_state_while 
-  (lambda (state statement)
+  (lambda (state statement return break continue)
     (cond
       ((null? (conditional statement)) (error "No boolean expression was defined"))
       ((number? (M_bool state (conditional statement))) (error "while statement evaluating a number instead of boolean expression. OOPS")) ; M_bool MAY return a number as part of its operation, but shouldn't unless we made a mistake on our part 
       ((M_bool state (conditional statement)) ;if the while boolean operation (<bool_operator> <expression1> <expression2>) is true
-       (M_state_while (M_state_statement state (cons (then_statement statement) '())) statement)) ; we need recurse on a state changed by the statement
+       (M_state_while (M_state_statement state (cons (then_statement statement) '()) return break continue) statement return break continue) return break continue) ; we need recurse on a state changed by the statement
       (else state) ; the M_bool returned false so we don't apply the statement to the state we simply pass up the state
       )))
 
@@ -79,7 +79,7 @@
       (else val))))
 
 (define strip_symbol
-  (lambda (parse_tree break)
+  (lambda (parse_tree)
     (cdar parse_tree)))
 
 ; Handles M_value. 
