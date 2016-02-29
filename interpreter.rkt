@@ -20,12 +20,12 @@
       ((eq? (first_symbol parse_tree) 'break) (break state))
       ((eq? (first_symbol parse_tree) 'continue) (continue state))
       ((eq? (first_symbol parse_tree) 'begin) (M_state_statement
-                                               (M_state_statement
-                                                state
+                                               (pop_last_state (M_state_statement
+                                                (push_new_state '() '() state)
                                                 (strip_symbol parse_tree)
-                                                return break continue)
+                                                return break continue))
                                               (next_stmt parse_tree)
-                                              return break continue))
+                                              return break continue)) 
       ((eq? (first_symbol parse_tree) 'var) (M_state_statement (M_state_init state (rest_of_statement parse_tree)) (next_stmt parse_tree) return break continue))
       ((eq? (first_symbol parse_tree) '=) (M_state_statement (M_state_assign state (rest_of_statement parse_tree)) (next_stmt parse_tree) return break continue))
       ((eq? (first_symbol parse_tree) 'if) (M_state_statement (M_state_if state (rest_of_statement parse_tree) return break continue) (next_stmt parse_tree) return break continue))
