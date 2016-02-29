@@ -60,7 +60,7 @@
       ((null? (conditional statement)) (error "No boolean expression was defined"))
       ((number? (M_bool state (conditional statement))) (error "while statement evaluating a number instead of boolean expression. OOPS")) ; M_bool MAY return a number as part of its operation, but shouldn't unless we made a mistake on our part 
       ((M_bool state (conditional statement)) ;if the while boolean operation (<bool_operator> <expression1> <expression2>) is true
-       (M_state_while (M_state_statement state (cons (then_statement statement) '()) return break continue) statement return break continue) return break continue) ; we need recurse on a state changed by the statement
+       (M_state_while (M_state_statement state (cons (then_statement statement) '()) return break continue) statement return break continue)) ; we need recurse on a state changed by the statement
       (else state) ; the M_bool returned false so we don't apply the statement to the state we simply pass up the state
       )))
 
