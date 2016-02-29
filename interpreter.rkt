@@ -7,13 +7,9 @@
 ; Interpret a file. 
 (define interpret
   (lambda (filename)
-<<<<<<< HEAD
-    (M_state_statement (new_state) (parser filename))))
-=======
     (call/cc
      (lambda (return)
-       (M_state_statement '(()()) (parser filename) return '() '())))))
->>>>>>> e86ba37b132265185267eeb74706511e10a0f810
+       (M_state_statement (new_state) (parser filename) return '() '())))))
 
 ; The general M_state function. Handles return/var/=/if/while.  
 (define M_state_statement
@@ -67,6 +63,9 @@
        (M_state_while (M_state_statement state (cons (then_statement statement) '()) return break continue) statement return break continue) return break continue) ; we need recurse on a state changed by the statement
       (else state) ; the M_bool returned false so we don't apply the statement to the state we simply pass up the state
       )))
+
+; 
+(define M_state_try 
 
 ; Handles M_state for a return 
 ; Sanitizes #t and #f to true/false respectively. 
@@ -155,6 +154,7 @@
 (define operand2 cddr)
 
 ; State operations below
+; General naming convention: "states" refers to all of the layers "state" refers to a single layer 
 
 ; Removes the top state layer and returns the rest of the states 
 (define pop_last_state
