@@ -9,23 +9,23 @@
   (lambda (filename)
     (call/cc
      (lambda (return)
-       (M_state_statement (new_state) (parser filename) return '() '())))))
+       (M_state_statement new_state (parser filename) return '() '())))))
 
 ; The general M_state function. Handles return/var/=/if/while.  
 (define M_state_statement
   (lambda (state parse_tree return break continue)
     (cond
       ((null? parse_tree) state)
-      ((equal? (first_symbol parse_tree) 'return) (get_sanitized_result state (return_exp parse_tree)))
+      ((equal? (first_symbol parse_tree) 'return) (return (get_sanitized_result state (return_exp parse_tree))))
       ((eq? (first_symbol parse_tree) 'break) (break state))
       ((eq? (first_symbol parse_tree) 'continue) (continue state))
       ((eq? (first_symbol parse_tree) 'begin) (M_state_statement
-                                               (M_state_statement
-                                                state
+                                               (pop_last_state (M_state_statement
+                                                (push_new_state '() '() state)
                                                 (strip_symbol parse_tree)
-                                                return break continue)
+                                                return break continue))
                                               (next_stmt parse_tree)
-                                              return break continue))
+                                              return break continue)) 
       ((eq? (first_symbol parse_tree) 'var) (M_state_statement (M_state_init state (rest_of_statement parse_tree)) (next_stmt parse_tree) return break continue))
       ((eq? (first_symbol parse_tree) '=) (M_state_statement (M_state_assign state (rest_of_statement parse_tree)) (next_stmt parse_tree) return break continue))
       ((eq? (first_symbol parse_tree) 'if) (M_state_statement (M_state_if state (rest_of_statement parse_tree) return break continue) (next_stmt parse_tree) return break continue))
@@ -60,12 +60,9 @@
       ((null? (conditional statement)) (error "No boolean expression was defined"))
       ((number? (M_bool state (conditional statement))) (error "while statement evaluating a number instead of boolean expression. OOPS")) ; M_bool MAY return a number as part of its operation, but shouldn't unless we made a mistake on our part 
       ((M_bool state (conditional statement)) ;if the while boolean operation (<bool_operator> <expression1> <expression2>) is true
-       (M_state_while (M_state_statement state (cons (then_statement statement) '()) return break continue) statement return break continue) return break continue) ; we need recurse on a state changed by the statement
+       (M_state_while (M_state_statement state (cons (then_statement statement) '()) return break continue) statement return break continue)) ; we need recurse on a state changed by the statement
       (else state) ; the M_bool returned false so we don't apply the statement to the state we simply pass up the state
       )))
-
-; 
-(define M_state_try 
 
 ; Handles M_state for a return 
 ; Sanitizes #t and #f to true/false respectively. 
