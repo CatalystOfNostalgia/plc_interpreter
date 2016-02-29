@@ -16,7 +16,7 @@
   (lambda (state parse_tree return break continue)
     (cond
       ((null? parse_tree) state)
-      ((equal? (first_symbol parse_tree) 'return) (get_sanitized_result state (return_exp parse_tree)))
+      ((equal? (first_symbol parse_tree) 'return) (return (get_sanitized_result state (return_exp parse_tree))))
       ((eq? (first_symbol parse_tree) 'break) (break state))
       ((eq? (first_symbol parse_tree) 'continue) (continue state))
       ((eq? (first_symbol parse_tree) 'begin) (M_state_statement
