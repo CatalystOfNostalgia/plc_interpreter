@@ -1,5 +1,5 @@
 var x = 0;
-var result = 1;
+var result = 0;
 
 while (x < 10) {
   if (result > 15) {
