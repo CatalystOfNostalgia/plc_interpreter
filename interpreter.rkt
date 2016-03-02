@@ -28,10 +28,10 @@
       ((eq? (first_symbol parse_tree) 'continue) state)
       ((eq? (first_symbol parse_tree) 'throw) (M_state_catch (throw_val parse_tree) state return break catch catch_body))
       ((eq? (first_symbol parse_tree) 'begin) (M_state_statement
-                                               (M_state_statement
-                                                state
+                                               (pop_last_state (M_state_statement
+                                                (push_state empty_state state)
                                                 (strip_symbol parse_tree)
-                                                return break catch catch_body)
+                                                return break catch catch_body))
                                               (next_stmt parse_tree)
                                               return break catch catch_body)) 
       ((eq? (first_symbol parse_tree) 'var) (M_state_statement (M_state_init state (rest_of_statement parse_tree)) (next_stmt parse_tree) return break catch catch_body))
