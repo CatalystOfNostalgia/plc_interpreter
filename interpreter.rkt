@@ -9,42 +9,53 @@
   (lambda (filename)
     (call/cc
      (lambda (return)
-       (M_state_statement new_state (parser filename) return (lambda (v) v) '() '())))))
+       (M_state_statement new_state (parser filename) return (lambda (v) (error "Continue outside of loop")) (lambda (v) (error "Break outside of loop")) (lambda (v) (error "Break or continue outside of loop")) '() '())))))
+
 
 ; The general M_state function. Handles return/var/=/if/while.  
 (define M_state_statement
-  (lambda (state parse_tree return break catch catch_body)
+  (lambda (state parse_tree return continue break break-return catch catch_body)
     (cond
       ((null? parse_tree) state)
       ((equal? (first_symbol parse_tree) 'return) (return (get_sanitized_result state (return_exp parse_tree))))
-      ((eq? (first_symbol parse_tree) 'break) (if (eq? (pop_last_state state) '())
-                                                  (error "Break outside of loop")
-                                                  (break state)))
-      ((eq? (first_symbol parse_tree) 'continue) state)
-      ((eq? (first_symbol parse_tree) 'throw) (M_state_catch (throw_val parse_tree) state return break catch catch_body))
+      ;((equal? (first_symbol parse_tree) 'return) (return state))
+      ((eq? (first_symbol parse_tree) 'break) (break (break-return state)))
+      ((eq? (first_symbol parse_tree) 'continue) (continue (break-return state)))
+      ((eq? (first_symbol parse_tree) 'throw) (M_state_catch (throw_val parse_tree) state return continue break break-return catch catch_body))
       ((eq? (first_symbol parse_tree) 'begin) (M_state_statement
                                                (pop_last_state (M_state_statement
                                                 (push_state empty_state state)
                                                 (strip_symbol parse_tree)
-                                                return break catch catch_body))
+                                                return continue break (lambda (v)
+                                                               (if (null? (pop_last_state v))
+                                                                   (error "Break or continue out of loop")       
+                                                                   (break-return (pop_last_state v))
+                                                               )) catch catch_body))
                                               (next_stmt parse_tree)
-                                              return break catch catch_body)) 
-      ((eq? (first_symbol parse_tree) 'var) (M_state_statement (M_state_init state (rest_of_statement parse_tree)) (next_stmt parse_tree) return break catch catch_body))
-      ((eq? (first_symbol parse_tree) '=) (M_state_statement (M_state_assign state (rest_of_statement parse_tree)) (next_stmt parse_tree) return break catch catch_body))
-      ((eq? (first_symbol parse_tree) 'if) (M_state_statement (pop_last_state (M_state_if (push_state empty_state state) (rest_of_statement parse_tree) return break catch catch_body)) (next_stmt parse_tree) return break catch catch_body))
-      ((eq? (first_symbol parse_tree) 'while) (M_state_statement (pop_last_state (M_state_while (push_state empty_state state) (rest_of_statement parse_tree) return catch catch_body)) (next_stmt parse_tree) return break catch catch_body))
-      ((eq? (first_symbol parse_tree) 'try) (M_state_statement (M_state_try state (rest_of_statement parse_tree) return break catch catch_body) (next_stmt parse_tree) return break catch catch_body))
+                                              return continue break break-return catch catch_body)) 
+      ((eq? (first_symbol parse_tree) 'var) (M_state_statement (M_state_init state (rest_of_statement parse_tree)) (next_stmt parse_tree) return continue break break-return catch catch_body))
+      ((eq? (first_symbol parse_tree) '=) (M_state_statement (M_state_assign state (rest_of_statement parse_tree)) (next_stmt parse_tree) return continue break break-return catch catch_body))
+      ((eq? (first_symbol parse_tree) 'if) (M_state_statement (M_state_if state (rest_of_statement parse_tree) return continue break break-return catch catch_body) (next_stmt parse_tree) return continue break break-return catch catch_body))
+      ((eq? (first_symbol parse_tree) 'while) (M_state_statement (M_state_while state (rest_of_statement parse_tree) return catch catch_body) (next_stmt parse_tree) return continue break break-return catch catch_body))
+      ((eq? (first_symbol parse_tree) 'try) (M_state_statement (M_state_try state (rest_of_statement parse_tree) return continue break break-return catch catch_body)
+                                                               (next_stmt parse_tree)
+                                                               return continue break
+                                                               (lambda (v)
+                                                               (if (null? (pop_last_state v))
+                                                                   (error "Break or continue out of loop")       
+                                                                   (break-return (pop_last_state v))
+                                                               )) catch catch_body))
     )))
 
 ;TODO have try push/pop a state, the pushed state needs to be given to M_state_statement, needs to pop on the return of M_state_statement
 ;     also needs to pop a state when throw is called, maybe create an M_state_throw to abstract some out of M_state_statement
 (define M_state_try
-  (lambda (state stmt return break catch catch_body)
+  (lambda (state stmt return continue break break-return catch catch_body)
     (M_state_finally (pop_last_state (call/cc
                                       (lambda (new_catch)
-                                        (M_state_statement (push_state empty_state state) (try_block stmt) return break (push_new_catch catch new_catch) (push_new_cb catch_body (catch_block stmt))))))
+                                        (M_state_statement (push_state empty_state state) (try_block stmt) return continue break break-return (push_new_catch catch new_catch) (push_new_cb catch_body (catch_block stmt))))))
                      (finally_block stmt)
-                     return break catch catch_body)))
+                     return continue break break-return catch catch_body)))
 
 (define push_new_cb
  (lambda (bodies body)
@@ -55,10 +66,10 @@
    (cons catch catches)))
 
 (define M_state_catch
-  (lambda (val state return break catch catch_body)
+  (lambda (val state return continue break break-return catch catch_body)
     (if (null? catch_body)
         (error "No Catch Statement")
-        ((this_catch catch) (M_state_statement (create_catch_state state (this_body catch_body) val) (strip_catch_prefix (this_body catch_body)) return break (pop_catch catch) (pop_body catch_body))))))
+        ((this_catch catch) (M_state_statement (create_catch_state state (this_body catch_body) val) (strip_catch_prefix (this_body catch_body)) return continue break break-return (pop_catch catch) (pop_body catch_body))))))
 
 (define create_catch_state
   (lambda (try_state catch_body val)
@@ -68,10 +79,10 @@
 ; Handles the executiong of the finally statement after try( and catch?) have run
 ; TODO: need if to catch when finally block is empty.
 (define M_state_finally
-  (lambda (state stmt return break catch catch_body)
+  (lambda (state stmt return continue break break-return catch catch_body)
     (if (null? stmt)
         state
-        (pop_last_state (M_state_statement (push_state empty_state state) (strip_finally_prefix stmt) return break catch catch_body)))))
+        (pop_last_state (M_state_statement (push_state empty_state state) (strip_finally_prefix stmt) return continue break break-return catch catch_body)))))
 
 ; Handles M_state of an init statement 
 (define M_state_init
@@ -87,10 +98,10 @@
 
 ; Handles M_state of an if statement 
 (define M_state_if
-  (lambda (state stmt return break catch catch_body)
+  (lambda (state stmt return continue break break-return catch catch_body)
     (cond
-      ((M_bool state (conditional stmt)) (M_state_statement state (cons (then_statement stmt) '()) return break catch catch_body))
-      ((has_optional stmt) (M_state_statement state (cons (optional_statement stmt) '()) return break catch catch_body))
+      ((M_bool state (conditional stmt)) (M_state_statement state (cons (then_statement stmt) '()) return continue break break-return catch catch_body))
+      ((has_optional stmt) (M_state_statement state (cons (optional_statement stmt) '()) return continue break break-return catch catch_body))
       (else state))))
 
 ; the statement is the car of the parse tree cleansed of the leading "while" designator
@@ -104,7 +115,10 @@
                            ((null? (conditional statement)) (error "No boolean expression was defined"))
                            ((number? (M_bool state (conditional statement))) (error "While condition evaluted to a number")) ; M_bool MAY return a number as part of its operation, but shouldn't unless we made a mistake on our part 
                            ((M_bool state (conditional statement)) ;if the while boolean operation (<bool_operator> <expression1> <expression2>) is true
-                            (loop (M_state_statement state (cons (then_statement statement) '()) return break catch catch_body) statement return catch catch_body)) ; we need recurse on a state changed by the statement
+                            (loop
+                             (call/cc
+                              (lambda (continue)
+                                (M_state_statement state (cons (then_statement statement) '()) return continue break (lambda (v) v) catch catch_body))) statement return catch catch_body)) ; we need recurse on a state changed by the statement
                            (else state) ; the M_bool returned false so we don't apply the statement to the state we simply pass up the state
       ))))
          (loop state statement return catch catch_body))))))
@@ -206,7 +220,7 @@
 (define catch_block cadr)
 (define strip_catch_prefix caddr)
 (define finally_block caddr)
-(define strip_finally_prefix cdr)
+(define strip_finally_prefix cadr)
     
 
 ; State operations below
