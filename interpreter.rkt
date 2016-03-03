@@ -9,12 +9,7 @@
   (lambda (filename)
     (call/cc
      (lambda (return)
-       (M_state_statement new_state (parser filename) return (lambda (v) v) default_catch 'none)))))
-
-;need to coordinate with 
-(define default_catch
-  (lambda (val)
-    (error val)))
+       (M_state_statement new_state (parser filename) return (lambda (v) v) '() '())))))
 
 ; The general M_state function. Handles return/var/=/if/while.  
 (define M_state_statement
@@ -45,24 +40,38 @@
 ;     also needs to pop a state when throw is called, maybe create an M_state_throw to abstract some out of M_state_statement
 (define M_state_try
   (lambda (state stmt return break catch catch_body)
-    (M_state_finally (call/cc
-                      (lambda (new_catch)
-                        (M_state_statement state (try_block stmt) return break new_catch (catch_block stmt))))
+    (M_state_finally (pop_last_state (call/cc
+                                      (lambda (new_catch)
+                                        (M_state_statement (push_state empty_state state) (try_block stmt) return break (push_new_catch catch new_catch) (push_new_cb catch_body (catch_block stmt))))))
                      (finally_block stmt)
                      return break catch catch_body)))
 
+(define push_new_cb
+ (lambda (bodies body)
+   (cons body bodies)))
 
-;TODO, needs to separate out (catch (e), assign e, etc
-;TODO have catch push/pop a state
+(define push_new_catch
+ (lambda (catches catch)
+   (cons catch catches)))
+
 (define M_state_catch
-  (lambda (val state stmt return break catch catch_body)
-    0))
+  (lambda (val state return break catch catch_body)
+    (if (null? catch_body)
+        (error "No Catch Statement")
+        ((this_catch catch) (M_state_statement (create_catch_state state (this_body catch_body) val) (strip_catch_prefix (this_body catch_body)) return break (pop_catch catch) (pop_body catch_body))))))
 
+(define create_catch_state
+  (lambda (try_state catch_body val)
+    (assign (initialize_variable (push_state empty_state (pop_last_state try_state)) (catch_var catch_body)) (catch_var catch_body) (M_bool try_state val))))
+         
+         
 ; Handles the executiong of the finally statement after try( and catch?) have run
-;TODO make finally push/pop a state
+; TODO: need if to catch when finally block is empty.
 (define M_state_finally
   (lambda (state stmt return break catch catch_body)
-    (M_state_statement state stmt return break catch catch_body)))
+    (if (null? stmt)
+        state
+        (pop_last_state (M_state_statement (push_state empty_state state) (strip_finally_prefix stmt) return break catch catch_body)))))
 
 ; Handles M_state of an init statement 
 (define M_state_init
@@ -189,11 +198,15 @@
 (define throw_val cdar)
 (define try_block car)
 (define other_stmts cdr)
-(define catch_var caadar)
+(define catch_var caadr)
+(define this_body car)
+(define pop_body cdr)
+(define this_catch car)
+(define pop_catch cdr)
 (define catch_block cadr)
-(define finally_block
-  (lambda (stmt)
-    (car (cdaddr stmt))))
+(define strip_catch_prefix caddr)
+(define finally_block caddr)
+(define strip_finally_prefix cdr)
     
 
 ; State operations below
