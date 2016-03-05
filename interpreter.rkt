@@ -18,13 +18,10 @@
 ; M_state_statement <state> <parse_tree> <return> <continue> <break> <break-return> <catch> <catch_body> <catch-return>
 ;<state> The state is a list of one or more pairings of variables and values where atoms of pairings signify levels of scope in increasing order, ex: '( ((a)(1)) ((x y) (3 2)) ), could signify x=3; y =2; if(x>y){a=1; ....}  
 ;<parse_tree> The return of simpleParse.scm on <filename>, signifying the order to evaluate logic, operations, and assignments ex: (while (== 3 3) (begin (= z (+ z 1)) (if (> z 8) (break) (continue))))
-;<return> 
-;<continue>
-;<break>
-;<break-return>
-;<catch>
-;<catch_body>
-;<catch-return>
+;<return> , <continue> permit ability to continue and re-evaluate loop conditional or deliver a return to the commandline
+;<break> permit ability to exit the innermost loop
+;<break-return> permits errors for breaks and continues that occur outside code blocks
+;<catch>, <catch_body>, <catch-return> continuations for try-catch-finally statements
 ; The general M_state function. Handles return/var/=/if/while.
 (define M_state_statement
   (lambda (state parse_tree return continue break break-return catch catch_body catch-return)
@@ -77,10 +74,10 @@
                                         (M_state_statement (push_state empty_state state) (try_block stmt) return continue break break-return (push_new_catch catch new_catch) (push_new_cb catch_body (catch_block stmt)) (lambda (v) v)))))
                      (finally_block stmt)
                      return continue break break-return catch catch_body catch-return)))
-
-(define push_new_cb
- (lambda (bodies body)
-   (cons body bodies)))
+;was used in development of Project2, no longer used
+;(define push_new_cb
+ ;(lambda (bodies body)
+   ;(cons body bodies)))
 
 (define push_new_catch
  (lambda (catches catch)
