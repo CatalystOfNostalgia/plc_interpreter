@@ -16,16 +16,16 @@
        (M_state_statement new_state (parser filename) return (lambda (v) (error "Continue outside of loop")) (lambda (v) (error "Break outside of loop")) (lambda (v) (error "Break or continue outside of loop")) '() '() '())))))
 
 ; M_state_statement <state> <parse_tree> <return> <continue> <break> <break-return> <catch> <catch_body> <catch-return>
-;<state>
-;<parse_tree>
-;<return>
+;<state> The state is a list of one or more pairings of variables and values where atoms of pairings signify levels of scope in increasing order, ex: '( ((a)(1)) ((x y) (3 2)) ), could signify x=3; y =2; if(x>y){a=1; ....}  
+;<parse_tree> The return of simpleParse.scm on <filename>, signifying the order to evaluate logic, operations, and assignments ex: (while (== 3 3) (begin (= z (+ z 1)) (if (> z 8) (break) (continue))))
+;<return> 
 ;<continue>
 ;<break>
 ;<break-return>
 ;<catch>
 ;<catch_body>
 ;<catch-return>
-; The general M_state function. Handles return/var/=/if/while.  
+; The general M_state function. Handles return/var/=/if/while.
 (define M_state_statement
   (lambda (state parse_tree return continue break break-return catch catch_body catch-return)
     (cond
@@ -220,28 +220,28 @@
 ;(define first_statement car);remenant of Project1, no longer used
 (define first_symbol caar)         ;used by M_state_statement to determine what procedure to apply to a atom of the parsetree
 (define rest_of_statement cdar)    ;used by M_state_statement such that after identifying the procedure, the variables operations and values of that procedure may be passed to the appropriate M_state 
-(define next_stmt cdr)             ;used by M_state_statement such that after 
-(define symbol car)
-(define assign_exp cdr)
-(define return_exp cadar)
-(define first_part_of_bool cadr)
-(define second_part_of_bool caddr)
-(define first_part_of_exp car)
-(define operator car)
-(define operand1 cdr)
-(define operand2 cddr)
-(define throw_val cdar)
-(define try_block car)
-(define other_stmts cdr)
-(define catch_var caadr)
-(define this_body car)
-(define pop_body cdr)
-(define this_catch car)
-(define pop_catch cdr)
-(define catch_block cadr)
-(define strip_catch_prefix caddr)
-(define finally_block caddr)
-(define strip_finally_prefix cadr)
+(define next_stmt cdr)             ;used by M_state_statement to interate through the remainder of the parsetree after identifying and executing the procedure at the front of the parsetree
+(define symbol car)                ;used by M_state_init and M_state_assign to obtain the variable reference, ex: 'x' or 'y'
+(define assign_exp cdr)            ;used in M_state_assign to signify the expression on the right of the '=' operator. If null, the variables will not hold a value.
+(define return_exp cadar)          ;used to pass the numerical or boolean value from the parsetree in M_state_statement to get_sanitized_result such that "true" may be returned instead of "#t", etc...
+(define first_part_of_bool cadr)   ;used by M_state_bool to obtain the first arguement in the boolean evaluation
+(define second_part_of_bool caddr) ;used by M_state_bool to obtain the second arguement in the boolean evaluation
+(define first_part_of_exp car)     ;used by M_state_expression to define, look up, and expand into  operator
+(define operator car)              ;used by M_state_expression to define what operation should occur between operand1 & operand2
+(define operand1 cdr)              ;refers to the value, or value represented by a variable or nested expression, that the operation should be applied to
+(define operand2 cddr)             ;refers to the value, or value represented by a variable or nested expression, that affects operand1 by the operator
+(define throw_val cdar)            ;used to extract the errorcode to throw from the parsetree should M_state_statement detect throwing is necessary
+(define try_block car)             ;used by M_state_try to abstract out the try block from the statement
+;(define other_stmts cdr) was used in development of Project2, no longer used
+(define catch_var caadr)           ;used by create_catch_state to ____________________
+(define this_body car)             ;used in M_state_catch to _________________
+(define pop_body cdr)              ;used in M_state_catch to _____________
+(define this_catch car)            ;used in M_state_catch to __________
+(define pop_catch cdr)             ;used in M_state_catch to __________
+(define catch_block cadr)          ;used in M_state_try to ____________
+(define strip_catch_prefix caddr)  ;used in M_state_catch to __________
+(define finally_block caddr)       ;used in M_state_try to ____________
+(define strip_finally_prefix cadr) ;used in M_state_finally to _________
     
 
 ; State operations below
