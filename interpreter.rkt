@@ -74,10 +74,11 @@
                                         (M_state_statement (push_state empty_state state) (try_block stmt) return continue break break-return (push_new_catch catch new_catch) (push_new_cb catch_body (catch_block stmt)) (lambda (v) v)))))
                      (finally_block stmt)
                      return continue break break-return catch catch_body catch-return)))
-;was used in development of Project2, no longer used
-;(define push_new_cb
- ;(lambda (bodies body)
-   ;(cons body bodies)))
+
+;--------- Try Abstractions ---------;
+(define push_new_cb
+ (lambda (bodies body)
+   (cons body bodies)))
 
 (define push_new_catch
  (lambda (catches catch)
@@ -155,6 +156,7 @@
       ((eq? val #f) 'false)
       (else val))))
 
+; abstraction to remove the body of the 
 (define strip_symbol
   (lambda (parse_tree)
     (cdar parse_tree)))
