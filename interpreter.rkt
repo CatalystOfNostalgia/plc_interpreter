@@ -56,7 +56,8 @@
     )))
 
 ; Handles a "try" block of a piece of code
-; Returns the state after execution of try block 
+; Runs the try block of code, storing the new catch continuation and the respective block of code.
+; When wither catch or try finish, that state is passed to the finally block
 (define M_state_try
   (lambda (state stmt return continue break break-return catch catch_body catch-return)
     (M_state_finally (pop_last_state (call/cc
@@ -66,14 +67,14 @@
                      return continue break break-return catch catch_body catch-return)))
 
 
-; Returns the state from a catch block 
+; Returns the state from a catch block
 (define M_state_catch
   (lambda (val state return continue break break-return catch catch_body catch-return)
     (if (null? catch_body)
         (error "No catch for throw")
         ((this_catch catch) (catch-return (M_state_statement (create_catch_state state (this_body catch_body) val) (strip_catch_prefix (this_body catch_body)) return continue break break-return (pop_catch catch) (pop_body catch_body) catch-return))))))
 
-; Creates a new catch state 
+; Creates a new catch state, intializing the catch variable as the value given to throw
 (define create_catch_state
   (lambda (try_state catch_body val)
     (assign (initialize_variable (push_state empty_state (pop_last_state try_state)) (catch_var catch_body)) (catch_var catch_body) (M_bool try_state val))))
