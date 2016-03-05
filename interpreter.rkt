@@ -28,7 +28,7 @@
     (cond
       ((null? parse_tree) state)
       ((equal? (first_symbol parse_tree) 'return) (return (get_sanitized_result state (return_exp parse_tree))))
-      ;((equal? (first_symbol parse_tree) 'return) (return state))
+      ;((equal? (first_symbol parse_tree) 'return) (return state)) ; Useful code for debugging. Comment this in/commont out above line to print out the state instead of return value 
       ((eq? (first_symbol parse_tree) 'break) (break (break-return state)))
       ((eq? (first_symbol parse_tree) 'continue) (continue (break-return state)))
       ((eq? (first_symbol parse_tree) 'throw) (M_state_catch (throw_val parse_tree) state return continue break break-return catch catch_body catch-return))
@@ -65,8 +65,9 @@
                                                                ))))
     )))
 
-;TODO have try push/pop a state, the pushed state needs to be given to M_state_statement, needs to pop on the return of M_state_statement
-;     also needs to pop a state when throw is called, maybe create an M_state_throw to abstract some out of M_state_statement
+; Handles a "try" block of a piece of code
+; Runs the try block of code, storing the new catch continuation and the respective block of code.
+; When wither catch or try finish, that state is passed to the finally block
 (define M_state_try
   (lambda (state stmt return continue break break-return catch catch_body catch-return)
     (M_state_finally (pop_last_state (call/cc
@@ -84,19 +85,20 @@
  (lambda (catches catch)
    (cons catch catches)))
 
+; Returns the state from a catch block
 (define M_state_catch
   (lambda (val state return continue break break-return catch catch_body catch-return)
     (if (null? catch_body)
         (error "No catch for throw")
         ((this_catch catch) (catch-return (M_state_statement (create_catch_state state (this_body catch_body) val) (strip_catch_prefix (this_body catch_body)) return continue break break-return (pop_catch catch) (pop_body catch_body) catch-return))))))
 
+; Creates a new catch state, intializing the catch variable as the value given to throw
 (define create_catch_state
   (lambda (try_state catch_body val)
     (assign (initialize_variable (push_state empty_state (pop_last_state try_state)) (catch_var catch_body)) (catch_var catch_body) (M_bool try_state val))))
          
          
 ; Handles the executiong of the finally statement after try( and catch?) have run
-; TODO: need if to catch when finally block is empty.
 (define M_state_finally
   (lambda (state stmt return continue break break-return catch catch_body catch-return)
     (if (null? stmt)
@@ -119,8 +121,8 @@
 (define M_state_if
   (lambda (state stmt return continue break break-return catch catch_body catch-return)
     (cond
-      ((M_bool state (conditional stmt)) (M_state_statement state (cons (then_statement stmt) '()) return continue break break-return catch catch_body catch-return))
-      ((has_optional stmt) (M_state_statement state (cons (optional_statement stmt) '()) return continue break break-return catch catch_body catch-return))
+      ((M_bool state (conditional stmt)) (M_state_statement state (wrap (then_statement stmt)) return continue break break-return catch catch_body catch-return))
+      ((has_optional stmt) (M_state_statement state (wrap (optional_statement stmt)) return continue break break-return catch catch_body catch-return))
       (else state))))
 
 ; the statement is the car of the parse tree cleansed of the leading "while" designator
@@ -137,10 +139,15 @@
                             (loop
                              (call/cc
                               (lambda (continue)
-                                (M_state_statement state (cons (then_statement statement) '()) return continue break (lambda (v) v) catch catch_body catch-return))) statement return catch catch_body)) ; we need recurse on a state changed by the statement
+                                (M_state_statement state (wrap (then_statement statement)) return continue break (lambda (v) v) catch catch_body catch-return))) statement return catch catch_body)) ; we need recurse on a state changed by the statement
                            (else state) ; the M_bool returned false so we don't apply the statement to the state we simply pass up the state
       ))))
          (loop state statement return catch catch_body))))))
+
+; Wraps a statement within an empty list for parsing purpsoes 
+(define wrap
+  (lambda (stmt)
+    (cons stmt '())))
 
 ; Handles M_state for a return 
 ; Sanitizes #t and #f to true/false respectively. 
@@ -156,7 +163,7 @@
       ((eq? val #f) 'false)
       (else val))))
 
-; abstraction to remove the body of the 
+; Removes the symbol from a parse tree and returns the rest of the tree 
 (define strip_symbol
   (lambda (parse_tree)
     (cdar parse_tree)))
@@ -211,7 +218,6 @@
   (lambda (exp)
     (null? (cddr exp))))
 
-;--------- State and operation parsing abstractions ---------;
 (define conditional car)           ;used to take the first atom from a statement given to M_state_if and M_state_while, which is the boolean conditional
 (define then_statement cadr)       ;used to take the atom, which may be a block of code or may be a single line, following the boolean conditional
 (define optional_statement caddr)  ;used in checks for and subsequent execution of operation(s), which may be a block of code or may be a single line, to be executed in the event of a false boolean conditional
@@ -241,10 +247,19 @@
 (define strip_catch_prefix caddr)  ;used in M_state_catch to __________
 (define finally_block caddr)       ;used in M_state_try to ____________
 (define strip_finally_prefix cadr) ;used in M_state_finally to _________
-    
 
+; Adds a new catch body onto the existing stack of catch bodies 
+(define push_new_cb
+ (lambda (bodies body)
+   (cons body bodies)))
+
+; Addes a catch to the stack of catches 
+(define push_new_catch
+ (lambda (catches catch)
+   (cons catch catches)))
+    
 ; State operations below
-; General naming convention: "states" refers to all of the layers "state" refers to a single layer 
+; General naming convention: "states" refers to all of the layers and "state" refers to a single layer 
 
 ; Removes the top state layer and returns the rest of the states 
 (define pop_last_state
@@ -280,7 +295,7 @@
       ((null? (variables_from_state state)) (error "Variable not declared"))
       ((and (eq? (next_var state) variable) (null? (next_val state))) (error "Variable not initialized"))
       ((eq? (next_var state) variable) (next_val state))
-      (else (get_val_state (create_state (cdr (variables_from_state state)) (cdr (values_from_state state))) variable)))))
+      (else (get_val_state (create_state (remove_first_variable (variables_from_state state)) (remove_first_value (values_from_state state))) variable)))))
 
 ; Creates a state from a list of vars and vals 
 (define create_state
@@ -292,14 +307,14 @@
   (lambda (state var val)
     (create_state (append (variables_from_state state) (cons var ())) (append (values_from_state state) (cons val ())))))
      
-; Initializes a variable in one of the layer 
+; Initializes a variable in one of the layers
 (define initialize_variable_in_state
   (lambda (state variable)
     (cond
       ((null? state) (error "No state was defined"))
-      ((null? (variables_from_state state)) (create_state (cons variable '()) '(()) ))
+      ((null? (variables_from_state state)) (create_state (cons variable '()) null_variable ))
       ((eq? (next_var state) variable) (error "Variable is already declared"))
-      (else (add_to_state (initialize_variable_in_state (create_state (cdr (variables_from_state state)) (cdr (values_from_state state))) variable) (next_var state) (next_val state))))))
+      (else (add_to_state (initialize_variable_in_state (create_state (remove_first_variable (variables_from_state state)) (remove_first_value (values_from_state state))) variable) (next_var state) (next_val state))))))
 
 ; Initializes a variable in the first layer of all of the states 
 (define initialize_variable
@@ -308,7 +323,8 @@
         (error "Variable already declared")
         (push_state (initialize_variable_in_state (first_layer states) variable) (rest_of_states states)))))
 
-; Assign
+; Use this to assign a value to a variable in the layer of states
+; It will do it tail recursively using assign_cps 
 (define assign
   (lambda (states variable value)
     (assign_cps states variable value (lambda (v) v))))
@@ -319,17 +335,17 @@
     (cond 
       ((null? state) (error "No state wut?"))
       ((null? (variables_from_state state)) (error "Variable not declared"))
-      ((eq? (next_var state) variable) (add_to_state (create_state (cdr (variables_from_state state)) (cdr (values_from_state state))) variable value))
-      (else (add_to_state (assign_state (create_state (cdr (variables_from_state state)) (cdr (values_from_state state))) variable value) (next_var state) (next_val state))))))
+      ((eq? (next_var state) variable) (add_to_state (create_state (remove_first_variable (variables_from_state state)) (remove_first_value (values_from_state state))) variable value))
+      (else (add_to_state (assign_state (create_state (remove_first_variable (variables_from_state state)) (remove_first_value (values_from_state state))) variable value) (next_var state) (next_val state))))))
 
 ; Assigns a value to a variable in the appropriate state 
 (define assign_cps
   (lambda (states variable value return)
     (cond
       ((null? states) (error "Variable not declared"))
-      ((check_var_initialized_in_state variable (first_layer states)) (return (cons (assign_state (first_layer states) variable value) (rest_of_states states))))
+      ((check_var_initialized_in_state variable (first_layer states)) (return (append_state (assign_state (first_layer states) variable value) (rest_of_states states))))
       (else (assign_cps (rest_of_states states) variable value (lambda (v)
-                                                                 (return (cons (first_layer states) v))))))))
+                                                                 (return (add_layer (first_layer states) v))))))))
                                                              
 ; Returns true if the variable has already been initialized in any layer, otherwise false. 
 (define check_var_initialized
@@ -363,3 +379,8 @@
 (define empty_state '(()()))      ;definition of an empty state as a list containing two null lists
 (define rest_of_states cdr)       ;used to grab the list of states besides the top state
 (define first_layer car)          ;used to grab the top state for the list of states
+(define append_state cons)        ;abstraction used to clarify operation of appending a state
+(define null_variable '(()))      ;abstraction used to clarify variable status
+(define add_layer cons)           ;abstraction used to clarify operation 
+(define remove_first_variable cdr)
+(define remove_first_value cdr)
