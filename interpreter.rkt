@@ -247,16 +247,6 @@
 (define strip_catch_prefix caddr)  ;used in M_state_catch to __________
 (define finally_block caddr)       ;used in M_state_try to ____________
 (define strip_finally_prefix cadr) ;used in M_state_finally to _________
-
-; Adds a new catch body onto the existing stack of catch bodies 
-(define push_new_cb
- (lambda (bodies body)
-   (cons body bodies)))
-
-; Addes a catch to the stack of catches 
-(define push_new_catch
- (lambda (catches catch)
-   (cons catch catches)))
     
 ; State operations below
 ; General naming convention: "states" refers to all of the layers and "state" refers to a single layer 
