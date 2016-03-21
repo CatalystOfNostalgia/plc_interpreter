@@ -2,7 +2,7 @@
 ; Eric Luan
 ; Steven Wendling
 ; William Ordiway 
-(load "simpleParser.scm")
+(load "functionParser.scm")
 
 ; interpret <filename>
 ; <filename> = "<path/><testname.txt>"
