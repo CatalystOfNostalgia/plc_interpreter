@@ -284,7 +284,7 @@
       ((null? state) (error "Variable not declared"))
       ((null? (variables_from_state state)) (error "Variable not declared"))
       ((and (eq? (next_var state) variable) (null? (next_val state))) (error "Variable not initialized"))
-      ((eq? (next_var state) variable) (next_val state))
+      ((eq? (next_var state) variable) (unbox (next_val state)))
       (else (get_val_state (create_state (remove_first_variable (variables_from_state state)) (remove_first_value (values_from_state state))) variable)))))
 
 ; Creates a state from a list of vars and vals 
@@ -302,7 +302,7 @@
   (lambda (state variable)
     (cond
       ((null? state) (error "No state was defined"))
-      ((null? (variables_from_state state)) (create_state (cons variable '()) null_variable ))
+      ((null? (variables_from_state state)) (create_state (cons variable '()) (cons (box '()) '())))
       ((eq? (next_var state) variable) (error "Variable is already declared"))
       (else (add_to_state (initialize_variable_in_state (create_state (remove_first_variable (variables_from_state state)) (remove_first_value (values_from_state state))) variable) (next_var state) (next_val state))))))
 
@@ -325,7 +325,7 @@
     (cond 
       ((null? state) (error "No state wut?"))
       ((null? (variables_from_state state)) (error "Variable not declared"))
-      ((eq? (next_var state) variable) (add_to_state (create_state (remove_first_variable (variables_from_state state)) (remove_first_value (values_from_state state))) variable value))
+      ((eq? (next_var state) variable) (begin (set-box! (next_val state) value) state));(add_to_state (create_state (remove_first_variable (variables_from_state state)) (remove_first_value (values_from_state state))) variable value))
       (else (add_to_state (assign_state (create_state (remove_first_variable (variables_from_state state)) (remove_first_value (values_from_state state))) variable value) (next_var state) (next_val state))))))
 
 ; Assigns a value to a variable in the appropriate state 
