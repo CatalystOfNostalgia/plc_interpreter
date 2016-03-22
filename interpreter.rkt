@@ -15,6 +15,27 @@
      (lambda (return)
        (M_state_statement new_state (parser filename) return (lambda (v) (error "Continue outside of loop")) (lambda (v) (error "Break outside of loop")) (lambda (v) (error "Break or continue outside of loop")) '() '() '())))))
 
+; high level function that creates global environment from source code
+(define parse_globals
+  (lambda (state parse_tree)
+    (M_state_global state parse_tree)))
+
+; Parses global portion of source code and returns the global environment
+(define M_state_global
+  (lambda (state parse_tree)
+    (cond
+      ((null? parse_tree) state)
+      ((eq? (first_symbol parse_tree) 'var) (M_state_global (M_state_init state (rest_of_statement parse_tree)) (next_stmt parse_tree)))
+      ((eq? (first_symbol parse_tree) 'function) (M_state_global (M_state_funcdef state (rest_of_statement parse_tree)) (next_stmt parse_tree)))
+      (else (error "Non-declarative statement outside of function.")))))
+
+; Returns the given environment with a new function defined.
+(define M_state_funcdef
+  (lambda (state parse_tree)
+    (assign (initialize_variable state (symbol parse_tree))
+            (symbol parse_tree)
+            (create_closure (function_vars parse_tree) (function_body parse_tree) function_state_creator)))) ; UNDEFINED: create_closure, function_vars, function_body, function_state_creator
+
 ; M_state_statement <state> <parse_tree> <return> <continue> <break> <break-return> <catch> <catch_body> <catch-return>
 ;<state> The state is a list of one or more pairings of variables and values where atoms of pairings signify levels of scope in increasing order, ex: '( ((a)(1)) ((x y) (3 2)) ), could signify x=3; y =2; if(x>y){a=1; ....}  
 ;<parse_tree> The return of simpleParse.scm on <filename>, signifying the order to evaluate logic, operations, and assignments ex: (while (== 3 3) (begin (= z (+ z 1)) (if (> z 8) (break) (continue))))
