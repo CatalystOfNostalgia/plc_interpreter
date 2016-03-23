@@ -15,6 +15,21 @@
      (lambda (return)
        (M_state_statement new_state (parser filename) return (lambda (v) (error "Continue outside of loop")) (lambda (v) (error "Break outside of loop")) (lambda (v) (error "Break or continue outside of loop")) '() '() '())))))
 
+; Calls a function, returns the return value of the function.
+(define do_func
+  (lambda (state name params)
+    (M_state_statement (get_func_state state name params) (get_func_body state name))))
+
+; returns the body of the function
+(define get_func_body
+  (lambda (state name)
+    (function_body (get_val state name))))
+
+;returns the initial state/environment for the function being called
+(define get_func_state
+  (lambda (state name params)
+    ((get_func_state_creator state name) (create_func_bindings (get_val state name) params) state))) ; TODO define: get_func_state_creator, create_func_bindings
+
 ; high level function that creates global environment from source code
 (define parse_globals
   (lambda (state parse_tree)
@@ -34,7 +49,15 @@
   (lambda (state parse_tree)
     (assign (initialize_variable state (symbol parse_tree))
             (symbol parse_tree)
-            (create_closure (function_vars parse_tree) (function_body parse_tree) function_state_creator)))) ; UNDEFINED: create_closure, function_vars, function_body, function_state_creator
+            (create_closure (function_vars parse_tree) function_state_creator (function_body parse_tree)))))
+
+(define create_closure
+  (lambda (vars state_creator body)
+    (cons vars (cons state_creator (cons body ())))))
+
+(define function_state_creator
+  (lambda (new_params state)
+    (push_state new_params state)))
 
 ; M_state_statement <state> <parse_tree> <return> <continue> <break> <break-return> <catch> <catch_body> <catch-return>
 ;<state> The state is a list of one or more pairings of variables and values where atoms of pairings signify levels of scope in increasing order, ex: '( ((a)(1)) ((x y) (3 2)) ), could signify x=3; y =2; if(x>y){a=1; ....}  
@@ -268,7 +291,9 @@
 (define strip_catch_prefix caddr)  ;used in M_state_catch to __________
 (define finally_block caddr)       ;used in M_state_try to ____________
 (define strip_finally_prefix cadr) ;used in M_state_finally to _________
-    
+(define function_vars cadr)
+(define function_body caddr)
+
 ; State operations below
 ; General naming convention: "states" refers to all of the layers and "state" refers to a single layer 
 
