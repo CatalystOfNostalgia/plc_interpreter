@@ -2,7 +2,7 @@
 ; Eric Luan
 ; Steven Wendling
 ; William Ordiway 
-(load "functionParser.scm")
+(load "simpleParser.scm")
 
 ; interpret <filename>
 ; <filename> = "<path/><testname.txt>"
@@ -294,6 +294,74 @@
 (define function_vars cadr)
 (define function_body caddr)
 
+; Environment operations. An environment is a linked list of states
+
+; Returns the top state (really the states)
+(define get_top_state
+  (lambda (environment)
+    ((null? (environment)) (error "Error"))
+    (else (car environment))))
+
+; Add an empty layer to the environment 
+(define add_empty_layer
+  (lambda (environment)
+      (add_layer environment new_state)))
+
+; Adds a layer to an environment
+(define add_layer
+  (lambda (environment states)
+    (cons states environment)))
+    
+; Retrieves the environment for a function  
+(define get_environment
+  (lambda (environment function)
+    (cond
+      ((null? environment) (error "Function not found"))
+      ((check_var_initialized (top_layer environment)) environment)
+      (else (get_environment (rest_of_environments environment))))))
+
+; Gets a function from an environment...can also be used to get values 
+(define get_function
+  (lambda (environment function)
+    (cond
+      ((null? environment) (error "Function not found"))
+      ((check_var_initialized (top_layer environment)) (get_val (top_layer_environment) function))
+      (else (get_function (rest_of_environments environment) function)))))
+
+; Checks if the namespace for a var is taken in the environment 
+(define var_exists_in_environment?
+  (lambda (environment)
+    ((null? environment) #f)
+    ((check_var_initialized (top_layer environment)) #t)
+    (else (var_exists_in_environment? (rest_of_environments environment)))))
+
+; Adds a callable function to an environment 
+(define add_function
+  (lambda (environment function components)
+    (cond 
+      ((null? environment) (error "No environment?"))
+      ((var_exists_in_environment? function) (error "Function name already taken"))
+      (else (set_value_in_environment (initialize_in_environment environment function) function components)))))
+      
+  
+; Initialize a variable in the top environment 
+(define initialize_in_environment
+  (lambda (environment var)
+    (cond
+      ((null? environment) (error "No environment???"))
+      ((not (var_exists_in_environment? environment)) (add_layer (rest_of_environments environment) (initialize_variable (top_layer environment) var)))
+      (else (error "Variable already initialized")))))
+
+(define set_value_in_environment
+  (lambda (environment var val)
+    (cond
+      ((null? environment) (error "Variable or function not declared"))
+      ((check_var_initialized (top_layer environment)) (add_layer (rest_of_environments environment (assign (top_layer environment) var val))))
+      (else (add_layer (set_value_in_environment (rest_of_environments environment) var val) (top_layer environment))))))
+    
+
+(define top_environment_layer car)
+(define rest_of_environments cdr)
 ; State operations below
 ; General naming convention: "states" refers to all of the layers and "state" refers to a single layer 
 
@@ -411,7 +479,7 @@
 (define values_from_state cadr)   ;used to obtain the list of values of a layer of a state
 (define next_var caar)            ;used to obtain a single variable from value list in state
 (define next_val caadr)           ;used to obtain a single value from value list in state
-(define new_state '((()(()))))    ;used in top level 'interpreter' call to initialize nested null lists for storing variables and values
+(define new_state '((()())))    ;used in top level 'interpreter' call to initialize nested null lists for storing variables and values
 (define empty_state '(()()))      ;definition of an empty state as a list containing two null lists
 (define rest_of_states cdr)       ;used to grab the list of states besides the top state
 (define first_layer car)          ;used to grab the top state for the list of states
