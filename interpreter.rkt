@@ -321,12 +321,12 @@
       (else (get_environment (rest_of_environments environment) function)))))
 
 ; Gets a function from an environment...can also be used to get values 
-(define get_function
+(define get_from_environment
   (lambda (environment function)
     (cond
       ((null? environment) (error "Function not found"))
       ((check_var_initialized function (top_layer environment)) (get_val (top_layer environment) function))
-      (else (get_function (rest_of_environments environment) function)))))
+      (else (get_from_environment (rest_of_environments environment) function)))))
 
 ; Checks if the namespace for a var is taken in the environment 
 (define var_exists_in_environment?
@@ -334,15 +334,6 @@
     ((null? environment) #f)
     ((check_var_initialized var (top_layer environment)) #t)
     (else (var_exists_in_environment? var (rest_of_environments environment)))))
-
-; Adds a callable function to an environment 
-(define add_function
-  (lambda (environment function components)
-    (cond 
-      ((null? environment) (error "No environment?"))
-      ((var_exists_in_environment? function) (error "Function name already taken"))
-      (else (set_value_in_environment (initialize_in_environment environment function) function components)))))
-      
   
 ; Initialize a variable in the top environment 
 (define initialize_in_environment
