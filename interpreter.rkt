@@ -27,7 +27,7 @@
 ; returns the body of the function
 (define get_func_body
   (lambda (state name)
-    (function_body (get_val state name))))
+    (function_body (get_val state name)))) ; TODO replace get_val
 
 ;returns the initial state/environment for the function being called
 (define get_func_state
@@ -75,7 +75,7 @@
 
 (define function_state_creator
   (lambda (param_names vals state)
-    (push_new_state param_names vals state)))
+    (push_new_state param_names vals state))); TODO: change this to storing the current state/env for the function to receieve
 
 ; M_state_statement <state> <parse_tree> <return> <continue> <break> <break-return> <catch> <catch_body> <catch-return>
 ;<state> The state is a list of one or more pairings of variables and values where atoms of pairings signify levels of scope in increasing order, ex: '( ((a)(1)) ((x y) (3 2)) ), could signify x=3; y =2; if(x>y){a=1; ....}  
@@ -355,9 +355,10 @@
 ; Checks if the namespace for a var is taken in the environment 
 (define var_exists_in_environment?
   (lambda (environment var)
-    ((null? environment) #f)
-    ((check_var_initialized var (top_layer environment)) #t)
-    (else (var_exists_in_environment? var (rest_of_environments environment)))))
+    (cond 
+      ((null? environment) #f)
+      ((check_var_initialized var (top_layer environment)) #t)
+      (else (var_exists_in_environment? var (rest_of_environments environment))))))
   
 ; Initialize a variable in the top environment 
 (define initialize_in_environment
@@ -375,7 +376,7 @@
       (else (add_layer (set_value_in_environment (rest_of_environments environment) var val) (top_layer environment))))))
     
 
-(define top_environment_layer car)
+(define top_layer car)
 (define rest_of_environments cdr)
 ; State operations below
 ; General naming convention: "states" refers to all of the layers and "state" refers to a single layer 
