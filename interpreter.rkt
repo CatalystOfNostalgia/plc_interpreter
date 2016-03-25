@@ -2,7 +2,7 @@
 ; Eric Luan
 ; Steven Wendling
 ; William Ordiway 
-(load "simpleParser.scm")
+(load "functionParser.scm")
 
 ; interpret <filename>
 ; <filename> = "<path/><testname.txt>"
@@ -15,10 +15,14 @@
      (lambda (return)
        (M_state_statement new_state (parser filename) return (lambda (v) (error "Continue outside of loop")) (lambda (v) (error "Break outside of loop")) (lambda (v) (error "Break or continue outside of loop")) '() '() '())))))
 
+(define func_interpret
+  (lambda (filename)
+    (do_func (parse_globals (add_empty_layer ()) (parser filename)) 'main ())))
+
 ; Calls a function, returns the return value of the function.
 (define do_func
   (lambda (state name params)
-    (M_state_statement (get_func_state state name params) (get_func_body state name))))
+    (M_state_statement (get_func_state state name params) (get_func_body state name)))) ; TODO: create function to do this but return state instead of val from function
 
 ; returns the body of the function
 (define get_func_body
@@ -28,7 +32,21 @@
 ;returns the initial state/environment for the function being called
 (define get_func_state
   (lambda (state name params)
-    ((get_func_state_creator state name) (create_func_bindings (get_val state name) params) state))) ; TODO define: get_func_state_creator, create_func_bindings
+    ((get_func_state_creator state name) (function_vars (get_val state name)) (resolve_input state params) state)))
+
+(define resolve_input
+  (lambda (state vals)
+    (resolve_input_cps state vals (lambda (v) v))))
+
+(define resolve_input_cps
+  (lambda (state vals return)
+    (cond
+      ((null? vals) (return vals))
+      (else (resolve_input_cps state (cdr vals) (lambda (v) (return (cons (M_bool state (car vals)) v))))))))
+
+(define get_func_state_creator
+  (lambda (state name)
+    (function_state_func (get_val state name))))
 
 ; high level function that creates global environment from source code
 (define parse_globals
@@ -47,7 +65,7 @@
 ; Returns the given environment with a new function defined.
 (define M_state_funcdef
   (lambda (state parse_tree)
-    (assign (initialize_variable state (symbol parse_tree))
+    (set_value_in_environment (initialize_in_environment state (symbol parse_tree))
             (symbol parse_tree)
             (create_closure (function_vars parse_tree) function_state_creator (function_body parse_tree)))))
 
@@ -56,8 +74,8 @@
     (cons vars (cons state_creator (cons body ())))))
 
 (define function_state_creator
-  (lambda (new_params state)
-    (push_state new_params state)))
+  (lambda (param_names vals state)
+    (push_new_state param_names vals state)))
 
 ; M_state_statement <state> <parse_tree> <return> <continue> <break> <break-return> <catch> <catch_body> <catch-return>
 ;<state> The state is a list of one or more pairings of variables and values where atoms of pairings signify levels of scope in increasing order, ex: '( ((a)(1)) ((x y) (3 2)) ), could signify x=3; y =2; if(x>y){a=1; ....}  
@@ -107,6 +125,7 @@
                                                                    (error "Break or continue out of loop")       
                                                                    (break-return (pop_last_state v))
                                                                ))))
+      ((eq? (first_symbol parse_tree) 'funcall) (M_state_statement (do_func state (func_name parse_tree) (func_input parse_tree)) return continue break break-return catch catch_body catch-return))
     )))
 
 ; Handles a "try" block of a piece of code
@@ -139,8 +158,7 @@
 ; Creates a new catch state, intializing the catch variable as the value given to throw
 (define create_catch_state
   (lambda (try_state catch_body val)
-    (assign (initialize_variable (push_state empty_state (pop_last_state try_state)) (catch_var catch_body)) (catch_var catch_body) (M_bool try_state val))))
-         
+    (set_value_in_environment (initialize_in_environment (push_state empty_state (pop_last_state try_state)) (catch_var catch_body)) (catch_var catch_body) (M_bool try_state val))))
          
 ; Handles the executiong of the finally statement after try( and catch?) have run
 (define M_state_finally
@@ -152,14 +170,14 @@
 ; Handles M_state of an init statement 
 (define M_state_init
   (lambda (state stmt)
-    (M_state_assign (initialize_variable state (symbol stmt)) stmt)))
+    (M_state_assign (initialize_in_environment state (symbol stmt)) stmt)))
 
 ; Handles M_state of an assign statement 
 (define M_state_assign
   (lambda (state stmt)
     (if (null? (assign_exp stmt))
-        (assign state (symbol stmt) '())
-        (assign state (symbol stmt) (M_bool state (cadr stmt))))))
+        (set_value_in_environment state (symbol stmt) '())
+        (set_value_in_environment state (symbol stmt) (M_bool state (cadr stmt))))))
 
 ; Handles M_state of an if statement 
 (define M_state_if
@@ -219,6 +237,7 @@
     (cond
       ((null? exp) '())
       ((number? exp) exp)
+      ((eq? (operator exp) 'funcall) (do_func state (eval_func_name exp) (eval_func_input exp))) ; TODO verify this
       ((eq? (operator exp) '+) (+ (M_val_expression state (operand1 exp)) (M_val_expression state (operand2 exp))))
       ((eq? (operator exp) '-) (if (unary? exp)
                                    (- 0 (M_val_expression state (operand1 exp)))
@@ -293,6 +312,11 @@
 (define strip_finally_prefix cadr) ;used in M_state_finally to _________
 (define function_vars cadr)
 (define function_body caddr)
+(define function_state_func cadr)
+(define func_input cddar)
+(define func_name cadar)
+(define eval_func_name cdar)
+(define eval_func_input cddr)
 
 ; Environment operations. An environment is a linked list of states
 
