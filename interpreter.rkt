@@ -35,7 +35,7 @@
     (cond
       ((and (null? vars) (null? vals)) state)
       ((or (null? vars) (null? vals)) (error "Input parameters mismatch with formal parameter count."))
-      (else (assign_func_vars (cdr vars) (cdr vals) (assign (initialize state (car val)) (car var) (car val)))))))
+      (else (assign_func_vars (cdr vars) (cdr vals) (assign (initialize_variable state (car vars)) (car vars) (car vals)))))))
 
 (define get_stored_state
   (lambda (state name)
@@ -98,17 +98,17 @@
       ((eq? (first_symbol parse_tree) 'continue) (continue (break-return state)))
       ((eq? (first_symbol parse_tree) 'throw) (M_state_catch (throw_val parse_tree) state return continue break break-return catch catch_body catch-return))
       ((eq? (first_symbol parse_tree) 'begin) (M_state_statement
-                                               (pop_last_state (M_state_statement
-                                                (push_state empty_state state)
+                                               (exit_block (M_state_statement
+                                                (enter_block state)
                                                 (strip_symbol parse_tree)
                                                 return continue break (lambda (v)
-                                                               (if (null? (pop_last_state v))
+                                                               (if (null? (exit_block v))
                                                                    (error "Break or continue out of loop")       
-                                                                   (break-return (pop_last_state v))
+                                                                   (break-return (exit_block v))
                                                                )) catch catch_body (lambda (v)
-                                                               (if (null? (pop_last_state v))
+                                                               (if (null? (exit_block v))
                                                                    (error "Break or continue out of loop")       
-                                                                   (catch-return (pop_last_state v))
+                                                                   (catch-return (exit_block v))
                                                                ))))
                                               (next_stmt parse_tree)
                                               return continue break break-return catch catch_body catch-return)) 
@@ -120,13 +120,13 @@
                                                                (next_stmt parse_tree)
                                                                return continue break
                                                                (lambda (v)
-                                                               (if (null? (pop_last_state v))
+                                                               (if (null? (exit_block v))
                                                                    (error "Break or continue out of loop")       
-                                                                   (break-return (pop_last_state v))
+                                                                   (break-return (exit_block v))
                                                                )) catch catch_body (lambda (v)
-                                                               (if (null? (pop_last_state v))
+                                                               (if (null? (exit_block v))
                                                                    (error "Break or continue out of loop")       
-                                                                   (break-return (pop_last_state v))
+                                                                   (break-return (exit_block v))
                                                                ))))
       ((eq? (first_symbol parse_tree) 'funcall) (M_state_statement (do_func state (func_name parse_tree) (func_input parse_tree)) return continue break break-return catch catch_body catch-return))
     )))
@@ -136,9 +136,9 @@
 ; When wither catch or try finish, that state is passed to the finally block
 (define M_state_try
   (lambda (state stmt return continue break break-return catch catch_body catch-return)
-    (M_state_finally (pop_last_state (call/cc
+    (M_state_finally (exit_block (call/cc
                                       (lambda (new_catch)
-                                        (M_state_statement (push_state empty_state state) (try_block stmt) return continue break break-return (push_new_catch catch new_catch) (push_new_cb catch_body (catch_block stmt)) (lambda (v) v)))))
+                                        (M_state_statement (enter_block state) (try_block stmt) return continue break break-return (push_new_catch catch new_catch) (push_new_cb catch_body (catch_block stmt)) (lambda (v) v)))))
                      (finally_block stmt)
                      return continue break break-return catch catch_body catch-return)))
 
@@ -161,14 +161,14 @@
 ; Creates a new catch state, intializing the catch variable as the value given to throw
 (define create_catch_state
   (lambda (try_state catch_body val)
-    (set_value_in_environment (initialize_in_environment (push_state empty_state (pop_last_state try_state)) (catch_var catch_body)) (catch_var catch_body) (M_bool try_state val))))
+    (set_value_in_environment (initialize_in_environment (enter_block (exit_block try_state)) (catch_var catch_body)) (catch_var catch_body) (M_bool try_state val))))
          
 ; Handles the executiong of the finally statement after try( and catch?) have run
 (define M_state_finally
   (lambda (state stmt return continue break break-return catch catch_body catch-return)
     (if (null? stmt)
         state
-        (pop_last_state (M_state_statement (push_state empty_state state) (strip_finally_prefix stmt) return continue break break-return catch catch_body catch-return)))))
+        (exit_block (M_state_statement (enter_block state) (strip_finally_prefix stmt) return continue break break-return catch catch_body catch-return)))))
 
 ; Handles M_state of an init statement 
 (define M_state_init
@@ -320,7 +320,7 @@
 (define function_state_func cadr)
 (define func_input cddar)
 (define func_name cadar)
-(define eval_func_name cdar)
+(define eval_func_name cadr)
 (define eval_func_input cddr)
 
 ; Environment operations. An environment is a linked list of states
@@ -329,14 +329,14 @@
   (lambda (environment)
     (cond
       ((null? environment) (error "No environment???!?!?"))
-      (else (add_state_layer (rest_of_environments environment) (push_state empty (top_layer environment)))))))
+      (else (add_state_layer (rest_of_environments environment) (push_state empty_state (top_layer environment)))))))
 
 ; Exit block 
 (define exit_block
   (lambda (environment)
     (cond
-      ((null? environment?) (error "No environment"))
-      (else ((add_state_layer (rest_of_environments environment) (pop_last_state (top_layer environment))))))))
+      ((null? environment) (error "No environment"))
+      (else (add_state_layer (rest_of_environments environment) (pop_last_state (top_layer environment)))))))
 
 ; Returns the top state (really the states)
 (define get_top_state
