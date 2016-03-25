@@ -22,17 +22,19 @@
 ; Calls a function, returns the return value of the function.
 (define do_func
   (lambda (state name params)
-    (M_state_statement (get_func_state state name params) (get_func_body state name)))) ; TODO: create function to do this but return state instead of val from function
+    (call/cc
+     (lambda (return)
+       (M_state_statement (get_func_state state name params) (get_func_body state name) return (lambda (v) (error "Continue outside of loop")) (lambda (v) (error "Break outside of loop")) (lambda (v) (error "Break or continue outside of loop")) '() '() '()))))) ; TODO: create function to do this but return state instead of val from function
 
 ; returns the body of the function
 (define get_func_body
   (lambda (state name)
-    (function_body (get_val state name)))) ; TODO replace get_val
+    (function_body (get_from_environment state name)))) ; TODO replace get_val
 
 ;returns the initial state/environment for the function being called
 (define get_func_state
   (lambda (state name params)
-    ((get_func_state_creator state name) (function_vars (get_val state name)) (resolve_input state params) state)))
+    ((get_func_state_creator state name) (function_vars (get_from_environment state name)) (resolve_input state params) state)))
 
 (define resolve_input
   (lambda (state vals)
@@ -46,7 +48,7 @@
 
 (define get_func_state_creator
   (lambda (state name)
-    (function_state_func (get_val state name))))
+    (function_state_func (get_from_environment state name))))
 
 ; high level function that creates global environment from source code
 (define parse_globals
@@ -75,7 +77,7 @@
 
 (define function_state_creator
   (lambda (param_names vals state)
-    (push_new_state param_names vals state))); TODO: change this to storing the current state/env for the function to receieve
+    (push_new_state param_names vals state))); TODO: change this to storing the current state/env for the function to receieve, will need to change use of this function higher up
 
 ; M_state_statement <state> <parse_tree> <return> <continue> <break> <break-return> <catch> <catch_body> <catch-return>
 ;<state> The state is a list of one or more pairings of variables and values where atoms of pairings signify levels of scope in increasing order, ex: '( ((a)(1)) ((x y) (3 2)) ), could signify x=3; y =2; if(x>y){a=1; ....}  
@@ -372,7 +374,7 @@
   (lambda (environment var val)
     (cond
       ((null? environment) (error "Variable or function not declared"))
-      ((check_var_initialized var (top_layer environment)) (add_state_layer (rest_of_environments environment (assign (top_layer environment) var val))))
+      ((check_var_initialized var (top_layer environment)) (add_state_layer (rest_of_environments environment) (assign (top_layer environment) var val)))
       (else (add_state_layer (set_value_in_environment (rest_of_environments environment) var val) (top_layer environment))))))
     
 
