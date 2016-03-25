@@ -305,7 +305,7 @@
 ; Add an empty layer to the environment 
 (define add_empty_layer
   (lambda (environment)
-      (add_layer environment new_state)))
+      (cons new_state environment)))
 
 ; Adds a layer to an environment
 (define add_layer
