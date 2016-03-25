@@ -11,14 +11,14 @@
 ; Effectively interprets and executes a very simple Java/C-ish language.
 (define interpret
   (lambda (filename)
-    (do_func (parse_globals (add_empty_layer ()) (parser filename)) 'main ())))
+    (do_func (parse_globals (add_empty_layer ()) (parser filename)) 'main () (lambda (e s) "No catch for throw."))))
 
 ; Calls a function, returns the return value of the function.
 (define do_func
-  (lambda (state name param_vals)
+  (lambda (state name param_vals throw)
     (call/cc
      (lambda (return)
-       (M_state_statement (get_func_state state name param_vals) (get_func_body state name) return (lambda (v) (error "Continue outside of loop")) (lambda (v) (error "Break outside of loop")) (lambda (v) (error "Break or continue outside of loop")) '() '() '()))))) ; TODO: create function to do this but return state instead of val from function
+       (M_state_statement (get_func_state state name param_vals throw) (get_func_body state name) return (lambda (v) (error "Continue outside of loop")) (lambda (v) (error "Break outside of loop")) (lambda (v) (error "Break or continue outside of loop")) throw)))))
 
 ; returns the body of the function
 (define get_func_body
@@ -27,8 +27,8 @@
 
 ;returns the initial state/environment for the function being called
 (define get_func_state
-  (lambda (state name param_vals)
-    (add_state_layer (get_stored_state state name) (assign_func_vars (get_stored_param_names state name) (resolve_input state param_vals) new_state))));DELETE/CHANGE push_new_state
+  (lambda (state name param_vals throw)
+    (add_state_layer (get_stored_state state name) (assign_func_vars (get_stored_param_names state name) (resolve_input state param_vals throw) new_state))))
 
 (define assign_func_vars
   (lambda (vars vals state)
@@ -46,14 +46,14 @@
     (env_func_vars (get_from_environment state name))))
 
 (define resolve_input
-  (lambda (state vals)
-    (resolve_input_cps state vals (lambda (v) v))))
+  (lambda (state vals throw)
+    (resolve_input_cps state vals throw (lambda (v) v))))
 
 (define resolve_input_cps
-  (lambda (state vals return)
+  (lambda (state vals throw return)
     (cond
       ((null? vals) (return vals))
-      (else (resolve_input_cps state (cdr vals) (lambda (v) (return (cons (M_bool state (car vals)) v))))))))
+      (else (resolve_input_cps state (cdr vals) throw (lambda (v) (return (cons (M_bool state (car vals) throw) v))))))))
 
 ; high level function that creates global environment from source code
 (define parse_globals
@@ -65,7 +65,7 @@
   (lambda (state parse_tree)
     (cond
       ((null? parse_tree) state)
-      ((eq? (first_symbol parse_tree) 'var) (M_state_global (M_state_init state (rest_of_statement parse_tree)) (next_stmt parse_tree)))
+      ((eq? (first_symbol parse_tree) 'var) (M_state_global (M_state_init state (rest_of_statement parse_tree) (lambda (e s) "No catch for throw")) (next_stmt parse_tree)))
       ((eq? (first_symbol parse_tree) 'function) (M_state_global (M_state_funcdef state (rest_of_statement parse_tree)) (next_stmt parse_tree)))
       (else (error "Non-declarative statement outside of function.")))))
 
@@ -93,14 +93,14 @@
 ;<catch>, <catch_body>, <catch-return> continuations for try-catch-finally statements
 ; The general M_state function. Handles return/var/=/if/while.
 (define M_state_statement
-  (lambda (state parse_tree return continue break break-return catch catch_body catch-return)
+  (lambda (state parse_tree return continue break break-return throw)
     (cond
       ((null? parse_tree) state)
-      ((equal? (first_symbol parse_tree) 'return) (return (get_sanitized_result state (return_exp parse_tree))))
+      ((equal? (first_symbol parse_tree) 'return) (return (get_sanitized_result state (return_exp parse_tree) throw)))
       ;((equal? (first_symbol parse_tree) 'return) (return state)) ; Useful code for debugging. Comment this in/commont out above line to print out the state instead of return value 
       ((eq? (first_symbol parse_tree) 'break) (break (break-return state)))
       ((eq? (first_symbol parse_tree) 'continue) (continue (break-return state)))
-      ((eq? (first_symbol parse_tree) 'throw) (M_state_catch (throw_val parse_tree) state return continue break break-return catch catch_body catch-return))
+      ((eq? (first_symbol parse_tree) 'throw) (throw (throw_val parse_tree) state))
       ((eq? (first_symbol parse_tree) 'begin) (M_state_statement
                                                (exit_block (M_state_statement
                                                 (enter_block state)
@@ -109,49 +109,59 @@
                                                                (if (null? (exit_block v))
                                                                    (error "Break or continue out of loop")       
                                                                    (break-return (exit_block v))
-                                                               )) catch catch_body (lambda (v)
-                                                               (if (null? (exit_block v))
-                                                                   (error "Break or continue out of loop")       
-                                                                   (catch-return (exit_block v))
-                                                               ))))
+                                                               )) throw))
                                               (next_stmt parse_tree)
-                                              return continue break break-return catch catch_body catch-return)) 
-      ((eq? (first_symbol parse_tree) 'var) (M_state_statement (M_state_init state (rest_of_statement parse_tree)) (next_stmt parse_tree) return continue break break-return catch catch_body catch-return))
-      ((eq? (first_symbol parse_tree) '=) (M_state_statement (M_state_assign state (rest_of_statement parse_tree)) (next_stmt parse_tree) return continue break break-return catch catch_body catch-return))
-      ((eq? (first_symbol parse_tree) 'if) (M_state_statement (M_state_if state (rest_of_statement parse_tree) return continue break break-return catch catch_body catch-return) (next_stmt parse_tree) return continue break break-return catch catch_body catch-return))
-      ((eq? (first_symbol parse_tree) 'while) (M_state_statement (M_state_while state (rest_of_statement parse_tree) return catch catch_body catch-return) (next_stmt parse_tree) return continue break break-return catch catch_body catch-return))
-      ((eq? (first_symbol parse_tree) 'try) (M_state_statement (M_state_try state (rest_of_statement parse_tree) return continue break break-return catch catch_body catch-return)
+                                              return continue break break-return throw)) 
+      ((eq? (first_symbol parse_tree) 'var) (M_state_statement (M_state_init state (rest_of_statement parse_tree) throw) (next_stmt parse_tree) return continue break break-return throw))
+      ((eq? (first_symbol parse_tree) '=) (M_state_statement (M_state_assign state (rest_of_statement parse_tree) throw) (next_stmt parse_tree) return continue break break-return throw))
+      ((eq? (first_symbol parse_tree) 'if) (M_state_statement (M_state_if state (rest_of_statement parse_tree) return continue break break-return throw) (next_stmt parse_tree) return continue break break-return throw))
+      ((eq? (first_symbol parse_tree) 'while) (M_state_statement (M_state_while state (rest_of_statement parse_tree) return throw) (next_stmt parse_tree) return continue break break-return throw))
+      ((eq? (first_symbol parse_tree) 'try) (M_state_statement (M_state_try
+                                                                state
+                                                                (rest_of_statement parse_tree)
+                                                                return continue break (lambda (v)
+                                                                                        (if (null? (exit_block v))
+                                                                                            (error "Break or continue out of loop")       
+                                                                                            (break-return (exit_block v))
+                                                                                            )) throw)
                                                                (next_stmt parse_tree)
-                                                               return continue break
-                                                               (lambda (v)
-                                                               (if (null? (exit_block v))
-                                                                   (error "Break or continue out of loop")       
-                                                                   (break-return (exit_block v))
-                                                               )) catch catch_body (lambda (v)
-                                                               (if (null? (exit_block v))
-                                                                   (error "Break or continue out of loop")       
-                                                                   (break-return (exit_block v))
-                                                               ))))
-      ((eq? (first_symbol parse_tree) 'funcall) (M_state_statement (call_func_ignore_return state parse_tree) (next_stmt parse_tree) return continue break break-return catch catch_body catch-return))
-      ((eq? (first_symbol parse_tree) 'function) (M_state_statement (M_state_funcdef state (rest_of_statement parse_tree)) (next_stmt parse_tree) return continue break break-return catch catch_body catch-return))
+                                                               return continue break break-return throw))
+      ((eq? (first_symbol parse_tree) 'funcall) (M_state_statement (call_func_ignore_return state parse_tree throw) (next_stmt parse_tree) return continue break break-return throw))
+      ((eq? (first_symbol parse_tree) 'function) (M_state_statement (M_state_funcdef state (rest_of_statement parse_tree)) (next_stmt parse_tree) return continue break break-return throw))
       )))
 
 (define call_func_ignore_return
-  (lambda (state parse_tree)
-    (if (do_func state (func_name parse_tree) (func_input parse_tree))
+  (lambda (state parse_tree throw)
+    (if (do_func state (func_name parse_tree) (func_input parse_tree) throw)
         state
         state)))
 
 ; Handles a "try" block of a piece of code
 ; Runs the try block of code, storing the new catch continuation and the respective block of code.
 ; When wither catch or try finish, that state is passed to the finally block
+;(define M_state_try
+ ; (lambda (state stmt return continue break break-return catch catch_body catch-return)
+  ;  (M_state_finally (exit_block (call/cc
+   ;                                   (lambda (new_catch)
+    ;                                    (M_state_statement (enter_block state) (try_block stmt) return continue break break-return (push_new_catch catch new_catch) (push_new_cb catch_body (catch_block stmt)) (lambda (v) v)))))
+     ;                (finally_block stmt)
+      ;               return continue break break-return catch catch_body catch-return)))
+
 (define M_state_try
-  (lambda (state stmt return continue break break-return catch catch_body catch-return)
-    (M_state_finally (exit_block (call/cc
-                                      (lambda (new_catch)
-                                        (M_state_statement (enter_block state) (try_block stmt) return continue break break-return (push_new_catch catch new_catch) (push_new_cb catch_body (catch_block stmt)) (lambda (v) v)))))
-                     (finally_block stmt)
-                     return continue break break-return catch catch_body catch-return)))
+  (lambda (state stmt return continue break break-return throw)
+    (call/cc
+     (lambda (try-break)
+       (letrec ((finally (lambda (s)
+                           (if (null? (finally_block stmt))
+                               state
+                               (M_state_statement state (cadr (finally_block stmt)) return continue break break-return throw))))
+                (try (lambda (s try-throw)
+                       (finally (M_state_statement state (try_block stmt) return continue break break-return try-throw))))
+                (catch (lambda (e s)
+                         (finally (M_state_statement (create_catch_state state s (catch_block stmt) e) (caddr (catch_block stmt)) return continue break break-return throw)))))
+         (try state (lambda (e s) (try-break (catch e s)))))))))
+                  
+                       
 
 ;--------- Try Abstractions ---------;
 (define push_new_cb
@@ -163,62 +173,62 @@
    (cons catch catches)))
 
 ; Returns the state from a catch block
-(define M_state_catch
-  (lambda (val state return continue break break-return catch catch_body catch-return)
-    (if (null? catch_body)
-        (error "No catch for throw")
-        ((this_catch catch) (catch-return (M_state_statement (create_catch_state state (this_body catch_body) val) (strip_catch_prefix (this_body catch_body)) return continue break break-return (pop_catch catch) (pop_body catch_body) catch-return))))))
+;(define M_state_catch
+ ; (lambda (val state return continue break break-return catch catch_body catch-return)
+  ;  (if (null? catch_body)
+   ;     (error "No catch for throw")
+    ;    ((this_catch catch) (catch-return (M_state_statement (create_catch_state state (this_body catch_body) val) (strip_catch_prefix (this_body catch_body)) return continue break break-return (pop_catch catch) (pop_body catch_body) catch-return))))))
 
 ; Creates a new catch state, intializing the catch variable as the value given to throw
 (define create_catch_state
-  (lambda (try_state catch_body val)
-    (set_value_in_environment (initialize_in_environment (enter_block (exit_block try_state)) (catch_var catch_body)) (catch_var catch_body) (M_bool try_state val))))
+  (lambda (state try_state catch_body val)
+    (set_value_in_environment (initialize_in_environment state (catch_var catch_body)) (catch_var catch_body) (M_bool try_state val (lambda (e s) "Had a throw in a throw")))))
          
 ; Handles the executiong of the finally statement after try( and catch?) have run
-(define M_state_finally
-  (lambda (state stmt return continue break break-return catch catch_body catch-return)
-    (if (null? stmt)
-        state
-        (exit_block (M_state_statement (enter_block state) (strip_finally_prefix stmt) return continue break break-return catch catch_body catch-return)))))
+;(define M_state_finally
+ ; (lambda (state stmt return continue break break-return catch catch_body catch-return)
+  ;  (if (null? stmt)
+   ;     state
+    ;    (exit_block (M_state_statement (enter_block state) (strip_finally_prefix stmt) return continue break break-return catch catch_body catch-return)))))
 
 ; Handles M_state of an init statement 
 (define M_state_init
-  (lambda (state stmt)
-    (M_state_assign (initialize_in_environment state (symbol stmt)) stmt)))
+  (lambda (state stmt throw)
+    (M_state_assign (initialize_in_environment state (symbol stmt)) stmt throw)))
 
 ; Handles M_state of an assign statement 
 (define M_state_assign
-  (lambda (state stmt)
+  (lambda (state stmt throw)
     (if (null? (assign_exp stmt))
         (set_value_in_environment state (symbol stmt) '())
-        (set_value_in_environment state (symbol stmt) (M_bool state (cadr stmt))))))
+        (set_value_in_environment state (symbol stmt) (M_bool state (cadr stmt) throw)))))
 
 ; Handles M_state of an if statement 
 (define M_state_if
-  (lambda (state stmt return continue break break-return catch catch_body catch-return)
+  (lambda (state stmt return continue break break-return throw)
     (cond
-      ((M_bool state (conditional stmt)) (M_state_statement state (wrap (then_statement stmt)) return continue break break-return catch catch_body catch-return))
-      ((has_optional stmt) (M_state_statement state (wrap (optional_statement stmt)) return continue break break-return catch catch_body catch-return))
+      ((M_bool state (conditional stmt) throw) (M_state_statement state (wrap (then_statement stmt)) return continue break break-return throw))
+      ((has_optional stmt) (M_state_statement state (wrap (optional_statement stmt)) return continue break break-return throw))
       (else state))))
 
 ; the statement is the car of the parse tree cleansed of the leading "while" designator
 ; meaning ((<bool_operator> <expression1> <expression2>) (<operation>))
 (define M_state_while 
-  (lambda (state statement return catch catch_body catch-return)
+  (lambda (state statement return throw)
     (call/cc
      (lambda (break)
-       (letrec ((loop (lambda (state statement return catch catch_body) 
+       (letrec ((loop (lambda (state statement return throw) 
                          (cond
                            ((null? (conditional statement)) (error "No boolean expression was defined"))
-                           ((number? (M_bool state (conditional statement))) (error "While condition evaluted to a number")) ; M_bool MAY return a number as part of its operation, but shouldn't unless we made a mistake on our part 
-                           ((M_bool state (conditional statement)) ;if the while boolean operation (<bool_operator> <expression1> <expression2>) is true
+                           ((number? (M_bool state (conditional statement) throw)) (error "While condition evaluted to a number")) ; M_bool MAY return a number as part of its operation, but shouldn't unless we made a mistake on our part 
+                           ((M_bool state (conditional statement) throw) ;if the while boolean operation (<bool_operator> <expression1> <expression2>) is true
                             (loop
                              (call/cc
                               (lambda (continue)
-                                (M_state_statement state (wrap (then_statement statement)) return continue break (lambda (v) v) catch catch_body catch-return))) statement return catch catch_body)) ; we need recurse on a state changed by the statement
+                                (M_state_statement state (wrap (then_statement statement)) return continue break (lambda (v) v) throw))) statement return throw)) ; we need recurse on a state changed by the statement
                            (else state) ; the M_bool returned false so we don't apply the statement to the state we simply pass up the state
       ))))
-         (loop state statement return catch catch_body))))))
+         (loop state statement return throw))))))
 
 ; Wraps a statement within an empty list for parsing purpsoes 
 (define wrap
@@ -228,8 +238,8 @@
 ; Handles M_state for a return 
 ; Sanitizes #t and #f to true/false respectively. 
 (define get_sanitized_result
-  (lambda (state exp)
-    (sanitize (M_bool state exp))))
+  (lambda (state exp throw)
+    (sanitize (M_bool state exp throw))))
 
 ; Handles returning and special return for #t and #f 
 (define sanitize
@@ -247,19 +257,19 @@
 ; Handles M_value. 
 ; Does +/-/*/"/"/%
 (define M_val_expression
-  (lambda (state exp)
+  (lambda (state exp throw)
     (cond
       ((null? exp) '())
       ((number? exp) exp)
-      ((eq? (operator exp) 'funcall) (do_func state (eval_func_name exp) (eval_func_input exp))) ; TODO verify this
-      ((eq? (operator exp) '+) (+ (M_val_expression state (operand1 exp)) (M_val_expression state (operand2 exp))))
+      ((eq? (operator exp) 'funcall) (do_func state (eval_func_name exp) (eval_func_input exp) throw))
+      ((eq? (operator exp) '+) (+ (M_val_expression state (operand1 exp) throw) (M_val_expression state (operand2 exp) throw)))
       ((eq? (operator exp) '-) (if (unary? exp)
-                                   (- 0 (M_val_expression state (operand1 exp)))
-                                   (- (M_val_expression state (operand1 exp)) (M_val_expression state (operand2 exp)))))
-      ((eq? (operator exp) '*) (* (M_val_expression state (operand1 exp)) (M_val_expression state (operand2 exp))))
-      ((eq? (operator exp) '/) (quotient (M_val_expression state (operand1 exp)) (M_val_expression state (operand2 exp))))
-      ((eq? (operator exp) '%) (remainder (M_val_expression state (operand1 exp)) (M_val_expression state (operand2 exp))))
-      ((list? (first_part_of_exp exp)) (M_val_expression state (first_part_of_exp exp)))
+                                   (- 0 (M_val_expression state (operand1 exp) throw))
+                                   (- (M_val_expression state (operand1 exp) throw) (M_val_expression state (operand2 exp) throw))))
+      ((eq? (operator exp) '*) (* (M_val_expression state (operand1 exp) throw) (M_val_expression state (operand2 exp) throw)))
+      ((eq? (operator exp) '/) (quotient (M_val_expression state (operand1 exp) throw) (M_val_expression state (operand2 exp) throw)))
+      ((eq? (operator exp) '%) (remainder (M_val_expression state (operand1 exp) throw) (M_val_expression state (operand2 exp) throw)))
+      ((list? (first_part_of_exp exp)) (M_val_expression state (first_part_of_exp exp) throw))
       ((number? (first_part_of_exp exp)) (first_part_of_exp exp))
       (else (get_from_environment state (first_part_of_exp exp))))))
 
@@ -267,23 +277,23 @@
 ; The reason for this is because of == and !=
 ; Our implementation allows <bool> == <bool> or <math> == <math>
 (define M_bool
-  (lambda (state exp)
+  (lambda (state exp throw)
     (cond
       ((null? exp) '())
       ((number? exp) exp)
       ((eq? exp 'true) #t)
       ((eq? exp 'false) #f)
       ((not (list? exp)) (get_from_environment state exp))
-      ((eq? (operator exp) '==) (eq? (M_bool state (first_part_of_bool exp)) (M_bool state (second_part_of_bool exp))))
-      ((eq? (operator exp) '!=) (not (eq? (M_bool state (first_part_of_bool exp)) (M_bool state (second_part_of_bool exp)))))
-      ((eq? (operator exp) '<) (< (M_bool state (first_part_of_bool exp)) (M_bool state (second_part_of_bool exp))))
-      ((eq? (operator exp) '>) (> (M_bool state (first_part_of_bool exp)) (M_bool state (second_part_of_bool exp))))
-      ((eq? (operator exp) '<=) (<= (M_bool state (first_part_of_bool exp)) (M_bool state (second_part_of_bool exp))))
-      ((eq? (operator exp) '>=) (>= (M_bool state (first_part_of_bool exp)) (M_bool state (second_part_of_bool exp))))
-      ((eq? (operator exp) '||) (or (M_bool state (first_part_of_bool exp)) (M_bool state (second_part_of_bool exp))))
-      ((eq? (operator exp) '&&) (and (M_bool state (first_part_of_bool exp)) (M_bool state (second_part_of_bool exp))))
-      ((eq? (operator exp) '!) (not (M_bool state (first_part_of_bool exp))))
-      (else (M_val_expression state exp)))))
+      ((eq? (operator exp) '==) (eq? (M_bool state (first_part_of_bool exp) throw) (M_bool state (second_part_of_bool exp) throw)))
+      ((eq? (operator exp) '!=) (not (eq? (M_bool state (first_part_of_bool exp) throw) (M_bool state (second_part_of_bool exp) throw))))
+      ((eq? (operator exp) '<) (< (M_bool state (first_part_of_bool exp) throw) (M_bool state (second_part_of_bool exp) throw)))
+      ((eq? (operator exp) '>) (> (M_bool state (first_part_of_bool exp) throw) (M_bool state (second_part_of_bool exp) throw)))
+      ((eq? (operator exp) '<=) (<= (M_bool state (first_part_of_bool exp) throw) (M_bool state (second_part_of_bool exp) throw)))
+      ((eq? (operator exp) '>=) (>= (M_bool state (first_part_of_bool exp) throw) (M_bool state (second_part_of_bool exp) throw)))
+      ((eq? (operator exp) '||) (or (M_bool state (first_part_of_bool exp) throw) (M_bool state (second_part_of_bool exp) throw)))
+      ((eq? (operator exp) '&&) (and (M_bool state (first_part_of_bool exp) throw) (M_bool state (second_part_of_bool exp) throw)))
+      ((eq? (operator exp) '!) (not (M_bool state (first_part_of_bool exp) throw)))
+      (else (M_val_expression state exp throw)))))
 
 ; Determines whether "if" has an optional or not 
 (define has_optional
