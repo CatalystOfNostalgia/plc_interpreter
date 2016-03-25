@@ -72,9 +72,13 @@
 ; Returns the given environment with a new function defined.
 (define M_state_funcdef
   (lambda (state parse_tree)
-    (set_value_in_environment (initialize_in_environment state (symbol parse_tree))
-            (symbol parse_tree)
-            (create_closure (function_vars parse_tree) state (function_body parse_tree)))))
+    (do_funky_env_thing (initialize_in_environment state (symbol parse_tree)) parse_tree)))
+
+(define do_funky_env_thing
+  (lambda (state parse_tree)
+    (set_value_in_environment state
+                              (symbol parse_tree)
+                              (create_closure (function_vars parse_tree) state (function_body parse_tree)))))
 
 (define create_closure
   (lambda (vars state body)
@@ -128,7 +132,7 @@
                                                                    (error "Break or continue out of loop")       
                                                                    (break-return (exit_block v))
                                                                ))))
-      ((eq? (first_symbol parse_tree) 'funcall) (M_state_statement (do_func state (func_name parse_tree) (func_input parse_tree)) return continue break break-return catch catch_body catch-return))
+      ((eq? (first_symbol parse_tree) 'funcall) (M_state_statement (do_func state (func_name parse_tree) (func_input parse_tree)) (next_stmt parse_tree) return continue break break-return catch catch_body catch-return))
     )))
 
 ; Handles a "try" block of a piece of code
@@ -375,8 +379,7 @@
   (lambda (environment var)
     (cond 
       ((null? environment) #f)
-      ((check_var_initialized var (top_layer environment)) #t)
-      (else (var_exists_in_environment? (rest_of_environments environment) var)))))
+      (else (check_var_initialized var (top_layer environment))))))
   
 ; Initialize a variable in the top environment 
 (define initialize_in_environment
