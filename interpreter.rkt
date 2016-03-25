@@ -132,8 +132,15 @@
                                                                    (error "Break or continue out of loop")       
                                                                    (break-return (exit_block v))
                                                                ))))
-      ((eq? (first_symbol parse_tree) 'funcall) (M_state_statement (do_func state (func_name parse_tree) (func_input parse_tree)) (next_stmt parse_tree) return continue break break-return catch catch_body catch-return))
-    )))
+      ((eq? (first_symbol parse_tree) 'funcall) (M_state_statement (call_func_ignore_return state parse_tree) (next_stmt parse_tree) return continue break break-return catch catch_body catch-return))
+      ((eq? (first_symbol parse_tree) 'function) (M_state_statement (M_state_funcdef state (rest_of_statement parse_tree)) (next_stmt parse_tree) return continue break break-return catch catch_body catch-return))
+      )))
+
+(define call_func_ignore_return
+  (lambda (state parse_tree)
+    (if (do_func state (func_name parse_tree) (func_input parse_tree))
+        state
+        state)))
 
 ; Handles a "try" block of a piece of code
 ; Runs the try block of code, storing the new catch continuation and the respective block of code.
