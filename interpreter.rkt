@@ -332,7 +332,7 @@
       (cons new_state environment)))
 
 ; Adds a layer to an environment
-(define add_layer
+(define add_state_layer
   (lambda (environment states)
     (cons states environment)))
     
@@ -358,22 +358,22 @@
     (cond 
       ((null? environment) #f)
       ((check_var_initialized var (top_layer environment)) #t)
-      (else (var_exists_in_environment? var (rest_of_environments environment))))))
+      (else (var_exists_in_environment? (rest_of_environments environment) var)))))
   
 ; Initialize a variable in the top environment 
 (define initialize_in_environment
   (lambda (environment var)
     (cond
       ((null? environment) (error "No environment???"))
-      ((not (var_exists_in_environment? environment var)) (add_layer (rest_of_environments environment) (initialize_variable (top_layer environment) var)))
+      ((not (var_exists_in_environment? environment var)) (add_state_layer (rest_of_environments environment) (initialize_variable (top_layer environment) var)))
       (else (error "Variable already initialized")))))
 
 (define set_value_in_environment
   (lambda (environment var val)
     (cond
       ((null? environment) (error "Variable or function not declared"))
-      ((check_var_initialized (top_layer environment)) (add_layer (rest_of_environments environment (assign (top_layer environment) var val))))
-      (else (add_layer (set_value_in_environment (rest_of_environments environment) var val) (top_layer environment))))))
+      ((check_var_initialized (top_layer environment)) (add_state_layer (rest_of_environments environment (assign (top_layer environment) var val))))
+      (else (add_state_layer (set_value_in_environment (rest_of_environments environment) var val) (top_layer environment))))))
     
 
 (define top_layer car)
