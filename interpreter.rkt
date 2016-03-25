@@ -11,30 +11,39 @@
 ; Effectively interprets and executes a very simple Java/C-ish language.
 (define interpret
   (lambda (filename)
-    (call/cc
-     (lambda (return)
-       (M_state_statement new_state (parser filename) return (lambda (v) (error "Continue outside of loop")) (lambda (v) (error "Break outside of loop")) (lambda (v) (error "Break or continue outside of loop")) '() '() '())))))
-
-(define func_interpret
-  (lambda (filename)
     (do_func (parse_globals (add_empty_layer ()) (parser filename)) 'main ())))
 
 ; Calls a function, returns the return value of the function.
 (define do_func
-  (lambda (state name params)
+  (lambda (state name param_vals)
     (call/cc
      (lambda (return)
-       (M_state_statement (get_func_state state name params) (get_func_body state name) return (lambda (v) (error "Continue outside of loop")) (lambda (v) (error "Break outside of loop")) (lambda (v) (error "Break or continue outside of loop")) '() '() '()))))) ; TODO: create function to do this but return state instead of val from function
+       (M_state_statement (get_func_state state name param_vals) (get_func_body state name) return (lambda (v) (error "Continue outside of loop")) (lambda (v) (error "Break outside of loop")) (lambda (v) (error "Break or continue outside of loop")) '() '() '()))))) ; TODO: create function to do this but return state instead of val from function
 
 ; returns the body of the function
 (define get_func_body
   (lambda (state name)
-    (function_body (get_from_environment state name)))) ; TODO replace get_val
+    (function_body (get_from_environment state name))))
 
 ;returns the initial state/environment for the function being called
 (define get_func_state
-  (lambda (state name params)
-    ((get_func_state_creator state name) (function_vars (get_from_environment state name)) (resolve_input state params) state)))
+  (lambda (state name param_vals)
+    (add_state_layer (get_stored_state state name) (assign_func_vars (get_stored_param_names state name) (resolve_input state param_vals) new_state))));DELETE/CHANGE push_new_state
+
+(define assign_func_vars
+  (lambda (vars vals state)
+    (cond
+      ((and (null? vars) (null? vals)) state)
+      ((or (null? vars) (null? vals)) (error "Input parameters mismatch with formal parameter count."))
+      (else (assign_func_vars (cdr vars) (cdr vals) (assign (initialize state (car val)) (car var) (car val)))))))
+
+(define get_stored_state
+  (lambda (state name)
+    (env_func_state (get_from_environment state name))))
+
+(define get_stored_param_names
+  (lambda (state name)
+    (env_func_vars (get_from_environment state name))))
 
 (define resolve_input
   (lambda (state vals)
@@ -45,10 +54,6 @@
     (cond
       ((null? vals) (return vals))
       (else (resolve_input_cps state (cdr vals) (lambda (v) (return (cons (M_bool state (car vals)) v))))))))
-
-(define get_func_state_creator
-  (lambda (state name)
-    (function_state_func (get_from_environment state name))))
 
 ; high level function that creates global environment from source code
 (define parse_globals
@@ -69,15 +74,11 @@
   (lambda (state parse_tree)
     (set_value_in_environment (initialize_in_environment state (symbol parse_tree))
             (symbol parse_tree)
-            (create_closure (function_vars parse_tree) function_state_creator (function_body parse_tree)))))
+            (create_closure (function_vars parse_tree) state (function_body parse_tree)))))
 
 (define create_closure
-  (lambda (vars state_creator body)
-    (cons vars (cons state_creator (cons body ())))))
-
-(define function_state_creator
-  (lambda (param_names vals state)
-    (push_new_state param_names vals state))); TODO: change this to storing the current state/env for the function to receieve, will need to change use of this function higher up
+  (lambda (vars state body)
+    (cons vars (cons state (cons body ())))))
 
 ; M_state_statement <state> <parse_tree> <return> <continue> <break> <break-return> <catch> <catch_body> <catch-return>
 ;<state> The state is a list of one or more pairings of variables and values where atoms of pairings signify levels of scope in increasing order, ex: '( ((a)(1)) ((x y) (3 2)) ), could signify x=3; y =2; if(x>y){a=1; ....}  
@@ -249,7 +250,7 @@
       ((eq? (operator exp) '%) (remainder (M_val_expression state (operand1 exp)) (M_val_expression state (operand2 exp))))
       ((list? (first_part_of_exp exp)) (M_val_expression state (first_part_of_exp exp)))
       ((number? (first_part_of_exp exp)) (first_part_of_exp exp))
-      (else (get_val state (first_part_of_exp exp))))))
+      (else (get_from_environment state (first_part_of_exp exp))))))
 
 ; M_bool handles returning booleans. It can also evaluate mathematical expressions. 
 ; The reason for this is because of == and !=
@@ -261,7 +262,7 @@
       ((number? exp) exp)
       ((eq? exp 'true) #t)
       ((eq? exp 'false) #f)
-      ((not (list? exp)) (get_val state exp))
+      ((not (list? exp)) (get_from_environment state exp))
       ((eq? (operator exp) '==) (eq? (M_bool state (first_part_of_bool exp)) (M_bool state (second_part_of_bool exp))))
       ((eq? (operator exp) '!=) (not (eq? (M_bool state (first_part_of_bool exp)) (M_bool state (second_part_of_bool exp)))))
       ((eq? (operator exp) '<) (< (M_bool state (first_part_of_bool exp)) (M_bool state (second_part_of_bool exp))))
@@ -313,6 +314,8 @@
 (define finally_block caddr)       ;used in M_state_try to ____________
 (define strip_finally_prefix cadr) ;used in M_state_finally to _________
 (define function_vars cadr)
+(define env_func_vars car)
+(define env_func_state cadr)
 (define function_body caddr)
 (define function_state_func cadr)
 (define func_input cddar)
@@ -389,11 +392,6 @@
     (cond
       ((null? states) (error "No state was given"))
       (else (rest_of_states states)))))
-
-; Add a new state layer with this list of variables and list of values 
-(define push_new_state
-  (lambda (vars vals states)
-    (cons (create_state vars vals) states)))
 
 ; Adds an existing state as the next layer on the states
 (define push_state
