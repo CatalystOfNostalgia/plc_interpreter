@@ -372,7 +372,7 @@
   (lambda (environment var val)
     (cond
       ((null? environment) (error "Variable or function not declared"))
-      ((check_var_initialized (top_layer environment)) (add_state_layer (rest_of_environments environment (assign (top_layer environment) var val))))
+      ((check_var_initialized var (top_layer environment)) (add_state_layer (rest_of_environments environment (assign (top_layer environment) var val))))
       (else (add_state_layer (set_value_in_environment (rest_of_environments environment) var val) (top_layer environment))))))
     
 
