@@ -324,6 +324,19 @@
 (define eval_func_input cddr)
 
 ; Environment operations. An environment is a linked list of states
+; Enter block
+(define enter_block
+  (lambda (environment)
+    (cond
+      ((null? environment) (error "No environment???!?!?"))
+      (else (add_state_layer (rest_of_environments environment) (push_state empty (top_layer environment)))))))
+
+; Exit block 
+(define exit_block
+  (lambda (environment)
+    (cond
+      ((null? environment?) (error "No environment"))
+      (else ((add_state_layer (rest_of_environments environment) (pop_last_state (top_layer environment))))))))
 
 ; Returns the top state (really the states)
 (define get_top_state
