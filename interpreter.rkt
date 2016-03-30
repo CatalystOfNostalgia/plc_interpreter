@@ -6,9 +6,8 @@
 
 ; interpret <filename>
 ; <filename> = "<path/><testname.txt>"
-; runs simpleParse.scm on file to obtain parse-tree which is passed to M_state_statement
-; along with error statements for continue/break/break-return and empty lists for catch/catch_body/catch-return.
-; Effectively interprets and executes a very simple Java/C-ish language.
+; runs functionParser.scm on file to obtain parse-tree which is passed to M_state_statement to set up environments.
+; such that main can then be run, Effectively interpreting and executing a very simple Java/C-ish language.
 (define interpret
   (lambda (filename)
     (do_func (parse_globals (add_empty_layer ()) (parser filename)) 'main () (lambda (e s) "No catch for throw."))))
@@ -69,7 +68,7 @@
       ((eq? (first_symbol parse_tree) 'function) (M_state_global (M_state_funcdef state (rest_of_statement parse_tree)) (next_stmt parse_tree)))
       (else (error "Non-declarative statement outside of function.")))))
 
-; Returns the given environment with a new function defined.
+; Returns the given environment with a new function defined
 (define M_state_funcdef
   (lambda (state parse_tree)
     (do_funky_env_thing (initialize_in_environment state (symbol parse_tree)) parse_tree)))
@@ -500,7 +499,8 @@
       (else (assign_cps (rest_of_states states) variable value (lambda (v)
                                                                  (return (add_layer (first_layer states) v))))))))
                                                              
-; Returns true if the variable has already been initialized in any layer, otherwise false. 
+; Returns true if the variable has already been initialized in any layer, otherwise false.
+; functionally a wrapper for check_var_initialized_in_state recursing through all the states
 (define check_var_initialized
   (lambda (var states)
     (cond
@@ -508,7 +508,7 @@
       ((null? rest_of_states) (check_var_initialized_in_state var (first_layer states)))
       (else (or (check_var_initialized var (rest_of_states states)) (check_var_initialized_in_state var (first_layer states)))))))
 
-; Returns true if the variable is initialized in this state 
+; Returns true if the variable is initialized in this state, iterating through state using recursion
 (define check_var_initialized_in_state
   (lambda (var state)
     (cond
@@ -535,5 +535,5 @@
 (define append_state cons)        ;abstraction used to clarify operation of appending a state
 (define null_variable '(()))      ;abstraction used to clarify variable status
 (define add_layer cons)           ;abstraction used to clarify operation 
-(define remove_first_variable cdr)
-(define remove_first_value cdr)
+(define remove_first_variable cdr);used in conjunction with '(variables_from_state state)' to peel off first variable from the list of variables in a state
+(define remove_first_value cdr)   ;used everywhere 'remove_first_variable' is used, to remove that variables corresponding value
