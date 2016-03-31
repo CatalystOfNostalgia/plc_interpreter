@@ -133,6 +133,7 @@
       ((eq? (first_symbol parse_tree) 'function) (M_state_statement (M_state_funcdef state (rest_of_statement parse_tree)) (next_stmt parse_tree) return continue break break-return throw))
       )))
 
+; Calls a function, and returns the current state for the next recursive call to M_state_statement
 (define call_func_ignore_return
   (lambda (state parse_tree throw)
     (if (do_func state (func_name parse_tree) (func_input parse_tree) throw)
@@ -140,16 +141,7 @@
         state)))
 
 ; Handles a "try" block of a piece of code
-; Runs the try block of code, storing the new catch continuation and the respective block of code.
-; When wither catch or try finish, that state is passed to the finally block
-;(define M_state_try
- ; (lambda (state stmt return continue break break-return catch catch_body catch-return)
-  ;  (M_state_finally (exit_block (call/cc
-   ;                                   (lambda (new_catch)
-    ;                                    (M_state_statement (enter_block state) (try_block stmt) return continue break break-return (push_new_catch catch new_catch) (push_new_cb catch_body (catch_block stmt)) (lambda (v) v)))))
-     ;                (finally_block stmt)
-      ;               return continue break break-return catch catch_body catch-return)))
-
+; Implementation copied from given student solution
 (define M_state_try
   (lambda (state stmt return continue break break-return throw)
     (call/cc
@@ -175,24 +167,10 @@
  (lambda (catches catch)
    (cons catch catches)))
 
-; Returns the state from a catch block
-;(define M_state_catch
- ; (lambda (val state return continue break break-return catch catch_body catch-return)
-  ;  (if (null? catch_body)
-   ;     (error "No catch for throw")
-    ;    ((this_catch catch) (catch-return (M_state_statement (create_catch_state state (this_body catch_body) val) (strip_catch_prefix (this_body catch_body)) return continue break break-return (pop_catch catch) (pop_body catch_body) catch-return))))))
-
 ; Creates a new catch state, intializing the catch variable as the value given to throw
 (define create_catch_state
   (lambda (state try_state catch_body val)
     (set_value_in_environment (initialize_in_environment state (catch_var catch_body)) (catch_var catch_body) (M_bool try_state val (lambda (e s) "Had a throw in a throw")))))
-         
-; Handles the executiong of the finally statement after try( and catch?) have run
-;(define M_state_finally
- ; (lambda (state stmt return continue break break-return catch catch_body catch-return)
-  ;  (if (null? stmt)
-   ;     state
-    ;    (exit_block (M_state_statement (enter_block state) (strip_finally_prefix stmt) return continue break break-return catch catch_body catch-return)))))
 
 ; Handles M_state of an init statement 
 (define M_state_init
@@ -341,7 +319,6 @@
 (define env_func_vars car)         ;abstraction for pulling func names from environment 
 (define env_func_state cadr)       ;abstraction for pulling state from environment
 (define function_body caddr)       ;abstraction for pulling function out of environment or parse_tree
-;(define function_state_func cadr)  ;was used in development, marked for deletion
 (define func_input cddar)          ;abstraction for pulling function input from parse tree
 (define func_name cadar)           ;abstraction for pulling func_name from parse tree
 (define eval_func_name cadr)       ;abstraction in M_val_expression for pulling function name from expression
