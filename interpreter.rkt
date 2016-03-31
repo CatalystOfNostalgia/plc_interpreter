@@ -36,6 +36,7 @@
       ((or (null? vars) (null? vals)) (error "Input parameters mismatch with formal parameter count."))
       (else (assign_func_vars (cdr vars) (cdr vals) (assign (initialize_variable state (car vars)) (car vars) (car vals)))))))
 
+;------------Abstractions for looking up parameters and state for a function----;
 (define get_stored_state
   (lambda (state name)
     (env_func_state (get_from_environment state name))))
@@ -44,6 +45,7 @@
   (lambda (state name)
     (env_func_vars (get_from_environment state name))))
 
+;----------wrapper for getting parameter values for input-----;
 (define resolve_input
   (lambda (state vals throw)
     (resolve_input_cps state vals throw (lambda (v) v))))
@@ -68,17 +70,19 @@
       ((eq? (first_symbol parse_tree) 'function) (M_state_global (M_state_funcdef state (rest_of_statement parse_tree)) (next_stmt parse_tree)))
       (else (error "Non-declarative statement outside of function.")))))
 
-; Returns the given environment with a new function defined
+; Returns the given environment with a new function defined by initializing the function and then creating closure
 (define M_state_funcdef
   (lambda (state parse_tree)
-    (do_funky_env_thing (initialize_in_environment state (symbol parse_tree)) parse_tree)))
+    (return_finished_environment (initialize_in_environment state (symbol parse_tree)) parse_tree)))
 
-(define do_funky_env_thing
+; wrapper for M_state_funcdef that ensures the environment with the function added is returned
+(define return_finished_environment
   (lambda (state parse_tree)
     (set_value_in_environment state
                               (symbol parse_tree)
                               (create_closure (function_vars parse_tree) state (function_body parse_tree)))))
 
+;Closure connomacher was talking about is a contination of the vars and state and body in scope
 (define create_closure
   (lambda (vars state body)
     (cons vars (cons state (cons body ())))))
@@ -324,24 +328,24 @@
 (define throw_val cdar)            ;used to extract the errorcode to throw from the parsetree should M_state_statement detect throwing is necessary
 (define try_block car)             ;used by M_state_try to abstract out the try block from the statement
 ;(define other_stmts cdr) was used in development of Project2, no longer used
-(define catch_var caadr)           ;used by create_catch_state to ____________________
-(define this_body car)             ;used in M_state_catch to _________________
-(define pop_body cdr)              ;used in M_state_catch to _____________
-(define this_catch car)            ;used in M_state_catch to __________
-(define pop_catch cdr)             ;used in M_state_catch to __________
-(define catch_block cadr)          ;used in M_state_try to ____________
-(define strip_catch_prefix caddr)  ;used in M_state_catch to __________
-(define finally_block caddr)       ;used in M_state_try to ____________
-(define strip_finally_prefix cadr) ;used in M_state_finally to _________
-(define function_vars cadr)
-(define env_func_vars car)
-(define env_func_state cadr)
-(define function_body caddr)
-(define function_state_func cadr)
-(define func_input cddar)
-(define func_name cadar)
-(define eval_func_name cadr)
-(define eval_func_input cddr)
+(define catch_var caadr)           ;used by create_catch_state 
+(define this_body car)             ;used in M_state_catch 
+(define pop_body cdr)              ;used in M_state_catch 
+(define this_catch car)            ;used in M_state_catch 
+(define pop_catch cdr)             ;used in M_state_catch 
+(define catch_block cadr)          ;used in M_state_try 
+(define strip_catch_prefix caddr)  ;used in M_state_catch 
+(define finally_block caddr)       ;used in M_state_try 
+(define strip_finally_prefix cadr) ;used in M_state_finally 
+(define function_vars cadr)        ;abstraction for pulling function variables out of parse trees
+(define env_func_vars car)         ;abstraction for pulling func names from environment 
+(define env_func_state cadr)       ;abstraction for pulling state from environment
+(define function_body caddr)       ;abstraction for pulling function out of environment or parse_tree
+;(define function_state_func cadr)  ;was used in development, marked for deletion
+(define func_input cddar)          ;abstraction for pulling function input from parse tree
+(define func_name cadar)           ;abstraction for pulling func_name from parse tree
+(define eval_func_name cadr)       ;abstraction in M_val_expression for pulling function name from expression
+(define eval_func_input cddr)      ;abstraction in M_val_expression for pulling function parameters from expression
 
 ; Environment operations. An environment is a linked list of states
 ; Enter block
@@ -405,6 +409,7 @@
       ((not (var_exists_in_environment? environment var)) (add_state_layer (rest_of_environments environment) (initialize_variable (top_layer environment) var)))
       (else (error "Variable already initialized")))))
 
+;if function or variable is declared in environment add a layer that represents its value 
 (define set_value_in_environment
   (lambda (environment var val)
     (cond
