@@ -2,19 +2,23 @@
 ; Eric Luan
 ; Steven Wendling
 ; William Ordiway 
-(load "functionParser.scm")
+(load "classParser.scm")
 
 ; interpret <filename>
 ; <filename> = "<path/><testname.txt>"
 ; runs functionParser.scm on file to obtain parse-tree which is passed to M_state_statement to set up environments.
 ; such that main can then be run, Effectively interpreting and executing a very simple Java/C-ish language.
 (define interpret
-  (lambda (filename)
-    (do_func (parse_globals (add_empty_layer ()) (parser filename)) 'main () (lambda (e s) "No catch for throw."))))
+  (lambda (filename class_name)
+    (do_func (parse_classes (add_empty_layer ()) (parser filename)) 'main () (lambda (e s) "No catch for throw."))))
+
+(define do_main
+  (lambda (env_with_classes class_name)
+    (do_func env_with_classes 'main () (lambda (e s) "No catch for throw.") class_name ())))
 
 ; Calls a function, returns the return value of the function.
 (define do_func
-  (lambda (state name param_vals throw)
+  (lambda (state name param_vals throw class this)
     (call/cc
      (lambda (return)
        (M_state_statement (get_func_state state name param_vals throw) (get_func_body state name) return (lambda (v) (error "Continue outside of loop")) (lambda (v) (error "Break outside of loop")) (lambda (v) (error "Break or continue outside of loop")) throw)))))
@@ -56,18 +60,34 @@
       ((null? vals) (return vals))
       (else (resolve_input_cps state (cdr vals) throw (lambda (v) (return (cons (M_bool state (car vals) throw) v))))))))
 
-; high level function that creates global environment from source code
-(define parse_globals
+; high level function that creates global environment(class definitions) from source code
+(define parse_classes
   (lambda (state parse_tree)
-    (M_state_global state parse_tree)))
+    (cond
+      ((null? parse_tree) return state)
+      ((eq? (first_symbol parse_tree) 'class) (parse_classes (M_state_classdef state (rest_of_statement parse_tree)) (next_stmt parse_tree)))
+      (else (error "Non-class statement at top level"))))) ; TODO make_class_binding/M_state_classdef
+
+(define M_state_classdef
+  (lambda (state parse_tree)
+    (make_class_binding (initialize_in_environment state (symbol parse_tree)) (cdr parse_tree) (symbol parse_tree))))
+
+(define make_class_binding
+  (lambda (state parse_tree class_name)
+    (set_value_in_environment state class_name (create_class_closure parse_tree))))
+
+(define create_class_closure
+  (lambda (parse_tree
+    (cons (car parse_tree) (eval
 
 ; Parses global portion of source code and returns the global environment
-(define M_state_global
+(define M_state_class
   (lambda (state parse_tree)
     (cond
       ((null? parse_tree) state)
-      ((eq? (first_symbol parse_tree) 'var) (M_state_global (M_state_init state (rest_of_statement parse_tree) (lambda (e s) "No catch for throw")) (next_stmt parse_tree)))
-      ((eq? (first_symbol parse_tree) 'function) (M_state_global (M_state_funcdef state (rest_of_statement parse_tree)) (next_stmt parse_tree)))
+      ((eq? (first_symbol parse_tree) 'var) (M_state_class (M_state_init state (rest_of_statement parse_tree) (lambda (e s) "No catch for throw")) (next_stmt parse_tree)))
+      ((eq? (first_symbol parse_tree) 'function) (M_state_class (M_state_funcdef state (rest_of_statement parse_tree)) (next_stmt parse_tree)))
+      ((eq? (first_symbol parse_tree) 'static-function) (M_state_class (M_state_funcdef state (rest_of_statement parse_tree)) (next_stmt parse_tree)))
       (else (error "Non-declarative statement outside of function.")))))
 
 ; Returns the given environment with a new function defined by initializing the function and then creating closure
@@ -156,17 +176,7 @@
                          (finally (M_state_statement (create_catch_state state s (catch_block stmt) e) (caddr (catch_block stmt)) return continue break break-return throw)))))
          (try state (lambda (e s) (try-break (catch e s)))))))))
                   
-                       
-
-;--------- Try Abstractions ---------;
-(define push_new_cb
- (lambda (bodies body)
-   (cons body bodies)))
-
-(define push_new_catch
- (lambda (catches catch)
-   (cons catch catches)))
-
+                     
 ; Creates a new catch state, intializing the catch variable as the value given to throw
 (define create_catch_state
   (lambda (state try_state catch_body val)
