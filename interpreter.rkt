@@ -64,7 +64,7 @@
 (define parse_classes
   (lambda (state parse_tree)
     (cond
-      ((null? parse_tree) return state)
+      ((null? parse_tree) state)
       ((eq? (first_symbol parse_tree) 'class) (parse_classes (M_state_classdef state (rest_of_statement parse_tree)) (next_stmt parse_tree)))
       (else (error "Non-class statement at top level"))))) ; TODO make_class_binding/M_state_classdef
 
@@ -76,9 +76,11 @@
   (lambda (state parse_tree class_name)
     (set_value_in_environment state class_name (create_class_closure parse_tree))))
 
+; Creates a class closure, containing the extends list(a list with one value, the parent), an evironment with just functions and intial values for variables,
+; and the class body for initialization
 (define create_class_closure
-  (lambda (parse_tree
-    (cons (car parse_tree) (eval
+  (lambda (parse_tree)
+    (cons (car parse_tree) (cons (M_state_class (add_empty_layer ()) (cadr parse_tree)) (cdr parse_tree)))))
 
 ; Parses global portion of source code and returns the global environment
 (define M_state_class
