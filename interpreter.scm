@@ -334,6 +334,24 @@
 (define eval_func_name cadr)       ;abstraction in M_val_expression for pulling function name from expression
 (define eval_func_input cddr)      ;abstraction in M_val_expression for pulling function parameters from expression
 
+; list of environment operations for handling a list of environments
+(define new_environment
+  (lambda () 
+    (cons (add_empty_layer ()) ())))
+
+(define get_top_environment
+  (lambda (environments)
+    (cond
+      ((null? environment) (error "No Environment passed"))
+      (else (car environments)))))
+
+(define get_global
+  (lambda (environments)
+    (cond
+      ((null? environments) (error "No environment passed"))
+      ((null? (head environments)) (car environments))
+      (else (get_global (cdr environments))))))
+
 ; Environment operations. An environment is a linked list of states
 ; Enter block
 (define enter_block
