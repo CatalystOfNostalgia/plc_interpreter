@@ -92,6 +92,15 @@
       ((eq? (first_symbol parse_tree) 'static-function) (M_state_class (M_state_funcdef state (rest_of_statement parse_tree)) (next_stmt parse_tree)))
       (else (error "Non-declarative statement outside of function.")))))
 
+(define M_state_class_instance
+  (lambda (state parse_tree)
+    (cond
+      ((null? parse_tree) state)
+      ((eq? (first_symbol parse_tree) 'var) (M_state_class (M_state_init state (rest_of_statement parse_tree) (lambda (e s) "No catch for throw")) (next_stmt parse_tree)))
+      ((eq? (first_symbol parse_tree) 'function) (M_state_class state (next_stmt parse_tree)))
+      ((eq? (first_symbol parse_tree) 'static-function) (M_state_class state (next_stmt parse_tree)))
+      (else (error "Non-declarative statement outside of function.")))))
+
 ; Returns the given environment with a new function defined by initializing the function and then creating closure
 (define M_state_funcdef
   (lambda (state parse_tree)
@@ -247,6 +256,23 @@
   (lambda (parse_tree)
     (cdar parse_tree)))
 
+(define create_new_obj
+  (lambda (state class_name)
+    (create_obj_info (instantiate_class_fields state class_name) class_name)))
+
+(define create_obj_info
+  (lambda (fields class_name)
+    (cons class_name (cons fields '()))))
+
+(define instantiate_class_fields
+  (lambda (state class_name)
+    (M_state_class_instance (add_empty_layer ()) (get_class_body state class_name))))
+
+(define get_class_body
+  (lambda (state class_name)
+    (caddr (get_from_environment state class_name))))
+    
+
 ; Handles M_value. 
 ; Does +/-/*/"/"/%
 (define M_val_expression
@@ -255,6 +281,7 @@
       ((null? exp) '())
       ((number? exp) exp)
       ((eq? (operator exp) 'funcall) (do_func state (eval_func_name exp) (eval_func_input exp) throw))
+      ((eq? (operator exp) 'new) (create_new_obj state (cadr exp)));
       ((eq? (operator exp) '+) (+ (M_val_expression state (operand1 exp) throw) (M_val_expression state (operand2 exp) throw)))
       ((eq? (operator exp) '-) (if (unary? exp)
                                    (- 0 (M_val_expression state (operand1 exp) throw))
