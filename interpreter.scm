@@ -93,13 +93,24 @@
       (else (error "Non-declarative statement outside of function.")))))
 
 (define M_state_class_instance
-  (lambda (state parse_tree)
+  (lambda (state parse_tree class_name)
     (cond
+      ((and (null? parse_tree) (null? (get_super_class state class_name))) (M_state_class_instance state (get_class_body state (get_super_class state class_name)) (get_super_class state class_name)))
       ((null? parse_tree) state)
-      ((eq? (first_symbol parse_tree) 'var) (M_state_class (M_state_init state (rest_of_statement parse_tree) (lambda (e s) "No catch for throw")) (next_stmt parse_tree)))
+      ((and (eq? (first_symbol parse_tree) 'var) (not (variable_in_environment (cadar parse_tree)))) (M_state_class (M_state_init state (rest_of_statement parse_tree) (lambda (e s) "No catch for throw")) (next_stmt parse_tree)))
       ((eq? (first_symbol parse_tree) 'function) (M_state_class state (next_stmt parse_tree)))
       ((eq? (first_symbol parse_tree) 'static-function) (M_state_class state (next_stmt parse_tree)))
       (else (error "Non-declarative statement outside of function.")))))
+
+(define get_super_class
+  (lambda (state class_name)
+    (maybe_grab_class_name (car (get_from_environment state class_name)))))
+
+(define maybe_grab_class_name
+  (lambda (class_name_list)
+    (cond
+      ((null? class_name_list) '())
+      (else (car class_name_list)))))
 
 ; Returns the given environment with a new function defined by initializing the function and then creating closure
 (define M_state_funcdef
@@ -266,7 +277,7 @@
 
 (define instantiate_class_fields
   (lambda (state class_name)
-    (M_state_class_instance (add_empty_layer ()) (get_class_body state class_name))))
+    (M_state_class_instance (add_empty_layer (cons (get_global state) ())) (get_class_body state class_name) class_name)))
 
 (define get_class_body
   (lambda (state class_name)
@@ -281,7 +292,7 @@
       ((null? exp) '())
       ((number? exp) exp)
       ((eq? (operator exp) 'funcall) (do_func state (eval_func_name exp) (eval_func_input exp) throw))
-      ((eq? (operator exp) 'new) (create_new_obj state (cadr exp)));
+      ((eq? (operator exp) 'new) (create_new_obj state (cadr exp)))
       ((eq? (operator exp) '+) (+ (M_val_expression state (operand1 exp) throw) (M_val_expression state (operand2 exp) throw)))
       ((eq? (operator exp) '-) (if (unary? exp)
                                    (- 0 (M_val_expression state (operand1 exp) throw))
@@ -292,6 +303,10 @@
       ((list? (first_part_of_exp exp)) (M_val_expression state (first_part_of_exp exp) throw))
       ((number? (first_part_of_exp exp)) (first_part_of_exp exp))
       (else (get_from_environment state (first_part_of_exp exp))))))
+
+;(define eval_func_with_env
+;  (lambda (state exp throw)
+    
 
 ; M_bool handles returning booleans. It can also evaluate mathematical expressions. 
 ; The reason for this is because of == and !=
@@ -371,14 +386,14 @@
 (define get_top_environment
   (lambda (environments)
     (cond
-      ((null? environment) (error "No Environment passed"))
+      ((null? environments) (error "No Environment passed"))
       (else (car environments)))))
 
 (define get_global
   (lambda (environments)
     (cond
       ((null? environments) (error "No environment passed"))
-      ((null? (head environments)) (car environments))
+      ((null? (cdr environments)) (car environments))
       (else (get_global (cdr environments))))))
 
 ; Environment operations. An environment is a linked list of states
