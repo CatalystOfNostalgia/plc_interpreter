@@ -14,7 +14,7 @@
 
 (define do_main
   (lambda (env_with_classes class_name)
-    (do_func env_with_classes 'main () (lambda (e s) "No catch for throw.") class_name ())))
+    (do_func (new_environment env_with_classes) 'main () (lambda (e s) "No catch for throw.") class_name () () ())))
 
 ; Calls a function, returns the return value of the function.
 (define do_func
@@ -26,7 +26,7 @@
 ; returns the body of the function
 (define get_func_body
   (lambda (state name)
-    (function_body (get_from_environment state name))))
+    (function_body (get_from_environment (car state) name))))
 
 ;returns the initial state/environment for the function being called
 (define get_func_state
@@ -43,11 +43,11 @@
 ;------------Abstractions for looking up parameters and state for a function----;
 (define get_stored_state
   (lambda (state name)
-    (env_func_state (get_from_environment state name))))
+    (env_func_state (get_from_environment (car state) name))))
 
 (define get_stored_param_names
   (lambda (state name)
-    (env_func_vars (get_from_environment state name))))
+    (env_func_vars (get_from_environment (car state) name))))
 
 ;----------wrapper for getting parameter values for input-----;
 (define resolve_input
@@ -104,7 +104,7 @@
 
 (define get_super_class
   (lambda (state class_name)
-    (maybe_grab_class_name (car (get_from_environment state class_name)))))
+    (maybe_grab_class_name (car (get_from_environment (get_global state) class_name)))))
 
 (define maybe_grab_class_name
   (lambda (class_name_list)
@@ -281,7 +281,7 @@
 
 (define get_class_body
   (lambda (state class_name)
-    (caddr (get_from_environment state class_name))))
+    (caddr (get_from_environment (get_global state) class_name))))
     
 
 ; Handles M_value. 
@@ -303,11 +303,16 @@
       ((eq? (operator exp) '%) (remainder (M_val_expression state (operand1 exp) throw) (M_val_expression state (operand2 exp) throw)))
       ((list? (first_part_of_exp exp)) (M_val_expression state (first_part_of_exp exp) throw))
       ((number? (first_part_of_exp exp)) (first_part_of_exp exp))
-      (else (get_from_environment state (first_part_of_exp exp))))))
+      (else (get_from_environment (car state) (first_part_of_exp exp))))))
+
+;(define get_variable_value
+ ; (lambda (state name throw class this)
+  ;  (cond
+      
 
 (define get_field_value
   (lambda (obj field_name)
-    (get_from_environment (get_obj_env obj) field_name)))
+    (get_from_environment (car (get_obj_env obj)) field_name)))
 
 (define get_obj_env
   (lambda (obj)
@@ -324,7 +329,7 @@
       ((number? exp) exp)
       ((eq? exp 'true) #t)
       ((eq? exp 'false) #f)
-      ((not (list? exp)) (get_from_environment state exp))
+      ((not (list? exp)) (get_from_environment (car state) exp))
       ((eq? (operator exp) '==) (eq? (M_bool state (first_part_of_bool exp) throw) (M_bool state (second_part_of_bool exp) throw)))
       ((eq? (operator exp) '!=) (not (eq? (M_bool state (first_part_of_bool exp) throw) (M_bool state (second_part_of_bool exp) throw))))
       ((eq? (operator exp) '<) (< (M_bool state (first_part_of_bool exp) throw) (M_bool state (second_part_of_bool exp) throw)))
@@ -386,8 +391,8 @@
 
 ; list of environment operations for handling a list of environments
 (define new_environment
-  (lambda () 
-    (cons (add_empty_layer ()) ())))
+  (lambda (global_env) 
+    (cons (add_empty_layer ()) (cons global_env ()))))
 
 (define get_top_environment
   (lambda (environments)
