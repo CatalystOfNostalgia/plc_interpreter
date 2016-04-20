@@ -292,6 +292,7 @@
       ((null? exp) '())
       ((number? exp) exp)
       ((eq? (operator exp) 'funcall) (do_func state (eval_func_name exp) (eval_func_input exp) throw))
+      ((eq? (operator exp) 'dot) (get_field_value (M_bool state (cadr exp) throw) (caddr exp)))
       ((eq? (operator exp) 'new) (create_new_obj state (cadr exp)))
       ((eq? (operator exp) '+) (+ (M_val_expression state (operand1 exp) throw) (M_val_expression state (operand2 exp) throw)))
       ((eq? (operator exp) '-) (if (unary? exp)
@@ -304,8 +305,13 @@
       ((number? (first_part_of_exp exp)) (first_part_of_exp exp))
       (else (get_from_environment state (first_part_of_exp exp))))))
 
-;(define eval_func_with_env
-;  (lambda (state exp throw)
+(define get_field_value
+  (lambda (obj field_name)
+    (get_from_environment (get_obj_env obj) field_name)))
+
+(define get_obj_env
+  (lambda (obj)
+    (cadr obj)))
     
 
 ; M_bool handles returning booleans. It can also evaluate mathematical expressions. 
