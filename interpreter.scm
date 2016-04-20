@@ -86,7 +86,7 @@
 ; and the class body for initialization
 (define create_class_closure
   (lambda (parse_tree)
-    (cons (car parse_tree) (cons (M_state_class (add_empty_layer ()) (cadr parse_tree)) (cdr parse_tree)))))
+    (cons (car parse_tree) (cons (M_state_class (add_empty_layer ()) (cadr parse_tree)) (cons (cdr parse_tree) ())))))
 
 ; Parses global portion of source code and returns the global environment
 (define M_state_class
