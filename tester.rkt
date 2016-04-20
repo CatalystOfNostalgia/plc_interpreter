@@ -1,30 +1,23 @@
-(load "interpreter.rkt")
+(load "interpreter.scm")
 
 ; General testing framework 
 (define test
-  (lambda (testfile expected)
-    (if (eq? (interpret testfile) expected)
+  (lambda (testfile class expected)
+    (if (eq? (interpret testfile class) expected)
         (string-append "Passed " testfile)
         (string-append "Failed " testfile))))
 
 ; Tests 1
-(test "tests3/test1.txt" 10)
-(test "tests3/test2.txt" 14)
-(test "tests3/test3.txt" 45)
-(test "tests3/test4.txt" 55)
-(test "tests3/test5.txt" 1)
-(test "tests3/test6.txt" 115)
-(test "tests3/test7.txt" 'true)
-(test "tests3/test8.txt" 20)
-(test "tests3/test9.txt" 24)
-(test "tests3/test10.txt" 2)
-(test "tests3/test11.txt" 35)
-; Manually run test 12. Should give error 
-(test "tests3/test13.txt" 90)
-(test "tests3/test14.txt" 69)
-(test "tests3/test15.txt" 87)
-(test "tests3/test16.txt" 64)
-; Manually run 17. Should give error 
-(test "tests3/test18.txt" 125)
-(test "tests3/test19.txt" 100)
-(test "tests3/test20.txt" 2000400)
+(test "tests4/test1.txt" 'A 15) ;A has main
+(test "tests4/test2.txt" 'A 12) ;A has main
+(test "tests4/test3.txt" 'A 125) ;A has main 
+(test "tests4/test4.txt" 'A 36) ;A has main
+(test "tests4/test5.txt" 'A 54) ;A has main
+(test "tests4/test6.txt" 'A 110) ;A has main
+(test "tests4/test7.txt" 'C 26) ;C has main
+(test "tests4/test8.txt" 'Square 117) ;square has main
+(test "tests4/test9.txt" 'Square 32) ;square has main
+(test "tests4/test10.txt" 'List 15) ;List has main
+(test "tests4/test11.txt" 'List 123456) ;List has main
+(test "tests4/test12.txt" 'List 5285) ;List has main
+(test "tests4/test13.txt" 'C -716) ;C has main
