@@ -14,24 +14,30 @@
 
 (define do_main
   (lambda (env_with_classes class_name)
-    (do_func env_with_classes 'main () (lambda (e s) "No catch for throw.") class_name ())))
+    (do_func (new_environment env_with_classes) 'main () (lambda (e s) "No catch for throw.") class_name () () ())))
 
 ; Calls a function, returns the return value of the function.
 (define do_func
   (lambda (state name param_vals throw class this)
     (call/cc
      (lambda (return)
-       (M_state_statement (get_func_state state name param_vals throw) (get_func_body state name) return (lambda (v) (error "Continue outside of loop")) (lambda (v) (error "Break outside of loop")) (lambda (v) (error "Break or continue outside of loop")) throw)))))
+       (M_state_statement (get_func_state state name param_vals throw class this)
+                          (get_func_body state name)
+                          return
+                          (lambda (v) (error "Continue outside of loop"))
+                          (lambda (v) (error "Break outside of loop"))
+                          (lambda (v) (error "Break or continue outside of loop"))
+                          throw class this)))))
 
 ; returns the body of the function
 (define get_func_body
   (lambda (state name)
-    (function_body (get_from_environment state name))))
+    (function_body (get_from_environment (car state) name))))
 
 ;returns the initial state/environment for the function being called
 (define get_func_state
-  (lambda (state name param_vals throw)
-    (add_state_layer (get_stored_state state name) (assign_func_vars (get_stored_param_names state name) (resolve_input state param_vals throw) new_state))))
+  (lambda (state name param_vals throw class this)
+    (add_state_layer (get_stored_state state name) (assign_func_vars (get_stored_param_names state name) (resolve_input state param_vals throw class this) new_state))))
 
 (define assign_func_vars
   (lambda (vars vals state)
@@ -41,24 +47,24 @@
       (else (assign_func_vars (cdr vars) (cdr vals) (assign (initialize_variable state (car vars)) (car vars) (car vals)))))))
 
 ;------------Abstractions for looking up parameters and state for a function----;
-(define get_stored_state
+(define get_stored_state ; TODO: NEED TO GET RID OF: want a function that does (new_environment (get_global state)) to create a new state based on the old one, need to look into functions defined in functions
   (lambda (state name)
-    (env_func_state (get_from_environment state name))))
+    (env_func_state (get_from_environment (car state) name))))
 
 (define get_stored_param_names
   (lambda (state name)
-    (env_func_vars (get_from_environment state name))))
+    (env_func_vars (get_from_environment (car state) name))))
 
 ;----------wrapper for getting parameter values for input-----;
 (define resolve_input
-  (lambda (state vals throw)
-    (resolve_input_cps state vals throw (lambda (v) v))))
+  (lambda (state vals throw class this)
+    (resolve_input_cps state vals throw class this (lambda (v) v))))
 
 (define resolve_input_cps
-  (lambda (state vals throw return)
+  (lambda (state vals throw class this return)
     (cond
       ((null? vals) (return vals))
-      (else (resolve_input_cps state (cdr vals) throw (lambda (v) (return (cons (M_bool state (car vals) throw) v))))))))
+      (else (resolve_input_cps state (cdr vals) throw class this (lambda (v) (return (cons (M_bool state (car vals) throw class this) v))))))))
 
 ; high level function that creates global environment(class definitions) from source code
 (define parse_classes
@@ -66,7 +72,7 @@
     (cond
       ((null? parse_tree) state)
       ((eq? (first_symbol parse_tree) 'class) (parse_classes (M_state_classdef state (rest_of_statement parse_tree)) (next_stmt parse_tree)))
-      (else (error "Non-class statement at top level"))))) ; TODO make_class_binding/M_state_classdef
+      (else (error "Non-class statement at top level")))))
 
 (define M_state_classdef
   (lambda (state parse_tree)
@@ -87,10 +93,30 @@
   (lambda (state parse_tree)
     (cond
       ((null? parse_tree) state)
-      ((eq? (first_symbol parse_tree) 'var) (M_state_class (M_state_init state (rest_of_statement parse_tree) (lambda (e s) "No catch for throw")) (next_stmt parse_tree)))
+      ((eq? (first_symbol parse_tree) 'var) (M_state_class (M_state_init state (rest_of_statement parse_tree) (lambda (e s) "No catch for throw") () ()) (next_stmt parse_tree)))
       ((eq? (first_symbol parse_tree) 'function) (M_state_class (M_state_funcdef state (rest_of_statement parse_tree)) (next_stmt parse_tree)))
       ((eq? (first_symbol parse_tree) 'static-function) (M_state_class (M_state_funcdef state (rest_of_statement parse_tree)) (next_stmt parse_tree)))
       (else (error "Non-declarative statement outside of function.")))))
+
+(define M_state_class_instance
+  (lambda (state parse_tree class_name)
+    (cond
+      ((and (null? parse_tree) (null? (get_super_class state class_name))) (M_state_class_instance state (get_class_body state (get_super_class state class_name)) (get_super_class state class_name)))
+      ((null? parse_tree) state)
+      ((and (eq? (first_symbol parse_tree) 'var) (not (variable_in_environment (cadar parse_tree)))) (M_state_class (M_state_init state (rest_of_statement parse_tree) (lambda (e s) "No catch for throw") () ()) (next_stmt parse_tree)))
+      ((eq? (first_symbol parse_tree) 'function) (M_state_class state (next_stmt parse_tree)))
+      ((eq? (first_symbol parse_tree) 'static-function) (M_state_class state (next_stmt parse_tree)))
+      (else (error "Non-declarative statement outside of function.")))))
+
+(define get_super_class
+  (lambda (state class_name)
+    (maybe_grab_class_name (car (get_from_environment (get_global state) class_name)))))
+
+(define maybe_grab_class_name
+  (lambda (class_name_list)
+    (cond
+      ((null? class_name_list) '())
+      (else (car class_name_list)))))
 
 ; Returns the given environment with a new function defined by initializing the function and then creating closure
 (define M_state_funcdef
@@ -118,10 +144,10 @@
 ;<catch>, <catch_body>, <catch-return> continuations for try-catch-finally statements
 ; The general M_state function. Handles return/var/=/if/while.
 (define M_state_statement
-  (lambda (state parse_tree return continue break break-return throw)
+  (lambda (state parse_tree return continue break break-return throw class this)
     (cond
       ((null? parse_tree) state)
-      ((equal? (first_symbol parse_tree) 'return) (return (get_sanitized_result state (return_exp parse_tree) throw)))
+      ((equal? (first_symbol parse_tree) 'return) (return (get_sanitized_result state (return_exp parse_tree) throw class this)))
       ;((equal? (first_symbol parse_tree) 'return) (return state)) ; Useful code for debugging. Comment this in/commont out above line to print out the state instead of return value 
       ((eq? (first_symbol parse_tree) 'break) (break (break-return state)))
       ((eq? (first_symbol parse_tree) 'continue) (continue (break-return state)))
@@ -134,13 +160,13 @@
                                                                (if (null? (exit_block v))
                                                                    (error "Break or continue out of loop")       
                                                                    (break-return (exit_block v))
-                                                               )) throw))
+                                                               )) throw class this))
                                               (next_stmt parse_tree)
-                                              return continue break break-return throw)) 
-      ((eq? (first_symbol parse_tree) 'var) (M_state_statement (M_state_init state (rest_of_statement parse_tree) throw) (next_stmt parse_tree) return continue break break-return throw))
-      ((eq? (first_symbol parse_tree) '=) (M_state_statement (M_state_assign state (rest_of_statement parse_tree) throw) (next_stmt parse_tree) return continue break break-return throw))
-      ((eq? (first_symbol parse_tree) 'if) (M_state_statement (M_state_if state (rest_of_statement parse_tree) return continue break break-return throw) (next_stmt parse_tree) return continue break break-return throw))
-      ((eq? (first_symbol parse_tree) 'while) (M_state_statement (M_state_while state (rest_of_statement parse_tree) return throw) (next_stmt parse_tree) return continue break break-return throw))
+                                              return continue break break-return throw class this)) 
+      ((eq? (first_symbol parse_tree) 'var) (M_state_statement (M_state_init state (rest_of_statement parse_tree) throw class this) (next_stmt parse_tree) return continue break break-return throw class this))
+      ((eq? (first_symbol parse_tree) '=) (M_state_statement (M_state_assign state (rest_of_statement parse_tree) throw class this) (next_stmt parse_tree) return continue break break-return throw class this))
+      ((eq? (first_symbol parse_tree) 'if) (M_state_statement (M_state_if state (rest_of_statement parse_tree) return continue break break-return throw class this) (next_stmt parse_tree) return continue break break-return throw class this))
+      ((eq? (first_symbol parse_tree) 'while) (M_state_statement (M_state_while state (rest_of_statement parse_tree) return throw class this) (next_stmt parse_tree) return continue break break-return throw class this))
       ((eq? (first_symbol parse_tree) 'try) (M_state_statement (M_state_try
                                                                 state
                                                                 (rest_of_statement parse_tree)
@@ -148,77 +174,77 @@
                                                                                         (if (null? (exit_block v))
                                                                                             (error "Break or continue out of loop")       
                                                                                             (break-return (exit_block v))
-                                                                                            )) throw)
+                                                                                            )) throw class this)
                                                                (next_stmt parse_tree)
-                                                               return continue break break-return throw))
-      ((eq? (first_symbol parse_tree) 'funcall) (M_state_statement (call_func_ignore_return state parse_tree throw) (next_stmt parse_tree) return continue break break-return throw))
-      ((eq? (first_symbol parse_tree) 'function) (M_state_statement (M_state_funcdef state (rest_of_statement parse_tree)) (next_stmt parse_tree) return continue break break-return throw))
+                                                               return continue break break-return throw class this))
+      ((eq? (first_symbol parse_tree) 'funcall) (M_state_statement (call_func_ignore_return state parse_tree throw class this) (next_stmt parse_tree) return continue break break-return throw class this))
+      ((eq? (first_symbol parse_tree) 'function) (M_state_statement (M_state_funcdef state (rest_of_statement parse_tree)) (next_stmt parse_tree) return continue break break-return throw class this))
       )))
 
 ; Calls a function, and returns the current state for the next recursive call to M_state_statement
 (define call_func_ignore_return
-  (lambda (state parse_tree throw)
-    (if (do_func state (func_name parse_tree) (func_input parse_tree) throw)
+  (lambda (state parse_tree throw class this)
+    (if (do_func state (func_name parse_tree) (func_input parse_tree) throw class this)
         state
         state)))
 
 ; Handles a "try" block of a piece of code
 ; Implementation copied from given student solution
 (define M_state_try
-  (lambda (state stmt return continue break break-return throw)
+  (lambda (state stmt return continue break break-return throw class this)
     (call/cc
      (lambda (try-break)
        (letrec ((finally (lambda (s)
                            (if (null? (finally_block stmt))
                                state
-                               (M_state_statement state (cadr (finally_block stmt)) return continue break break-return throw))))
+                               (M_state_statement state (cadr (finally_block stmt)) return continue break break-return throw class this))))
                 (try (lambda (s try-throw)
-                       (finally (M_state_statement state (try_block stmt) return continue break break-return try-throw))))
+                       (finally (M_state_statement state (try_block stmt) return continue break break-return try-throw class this))))
                 (catch (lambda (e s)
-                         (finally (M_state_statement (create_catch_state state s (catch_block stmt) e) (caddr (catch_block stmt)) return continue break break-return throw)))))
+                         (finally (M_state_statement (create_catch_state state s (catch_block stmt) e class this) (caddr (catch_block stmt)) return continue break break-return throw class this)))))
          (try state (lambda (e s) (try-break (catch e s)))))))))
                   
                      
 ; Creates a new catch state, intializing the catch variable as the value given to throw
 (define create_catch_state
-  (lambda (state try_state catch_body val)
-    (set_value_in_environment (initialize_in_environment state (catch_var catch_body)) (catch_var catch_body) (M_bool try_state val (lambda (e s) "Had a throw in a throw")))))
+  (lambda (state try_state catch_body val class this)
+    (set_value_in_environment (initialize_in_environment state (catch_var catch_body)) (catch_var catch_body) (M_bool try_state val (lambda (e s) "Had a throw in a throw") class this))))
 
 ; Handles M_state of an init statement 
 (define M_state_init
-  (lambda (state stmt throw)
-    (M_state_assign (initialize_in_environment state (symbol stmt)) stmt throw)))
+  (lambda (state stmt throw class this)
+    (M_state_assign (initialize_in_environment state (symbol stmt)) stmt throw class this)))
 
 ; Handles M_state of an assign statement 
 (define M_state_assign
-  (lambda (state stmt throw)
+  (lambda (state stmt throw class this)
     (if (null? (assign_exp stmt))
         (set_value_in_environment state (symbol stmt) '())
-        (set_value_in_environment state (symbol stmt) (M_bool state (cadr stmt) throw)))))
+        (set_value_in_environment state (symbol stmt) (M_bool state (cadr stmt) throw class this)))))
 
 ; Handles M_state of an if statement 
 (define M_state_if
-  (lambda (state stmt return continue break break-return throw)
+  (lambda (state stmt return continue break break-return throw class this)
     (cond
-      ((M_bool state (conditional stmt) throw) (M_state_statement state (wrap (then_statement stmt)) return continue break break-return throw))
-      ((has_optional stmt) (M_state_statement state (wrap (optional_statement stmt)) return continue break break-return throw))
+      ((M_bool state (conditional stmt) throw class this) (M_state_statement state (wrap (then_statement stmt)) return continue break break-return throw class this))
+      ((has_optional stmt) (M_state_statement state (wrap (optional_statement stmt)) return continue break break-return throw class this))
       (else state))))
 
 ; the statement is the car of the parse tree cleansed of the leading "while" designator
 ; meaning ((<bool_operator> <expression1> <expression2>) (<operation>))
 (define M_state_while 
-  (lambda (state statement return throw)
+  (lambda (state statement return throw class this)
     (call/cc
      (lambda (break)
        (letrec ((loop (lambda (state statement return throw) 
                          (cond
                            ((null? (conditional statement)) (error "No boolean expression was defined"))
-                           ((number? (M_bool state (conditional statement) throw)) (error "While condition evaluted to a number")) ; M_bool MAY return a number as part of its operation, but shouldn't unless we made a mistake on our part 
-                           ((M_bool state (conditional statement) throw) ;if the while boolean operation (<bool_operator> <expression1> <expression2>) is true
+                           ((number? (M_bool state (conditional statement) throw class this)) (error "While condition evaluted to a number")) ; M_bool MAY return a number as part of its operation, but shouldn't unless we made a mistake on our part 
+                           ((M_bool state (conditional statement) throw class this) ;if the while boolean operation (<bool_operator> <expression1> <expression2>) is true
                             (loop
                              (call/cc
                               (lambda (continue)
-                                (M_state_statement state (wrap (then_statement statement)) return continue break (lambda (v) v) throw))) statement return throw)) ; we need recurse on a state changed by the statement
+                                (M_state_statement state (wrap (then_statement statement)) return continue break (lambda (v) v) throw class this))) statement return throw)) ; we need recurse on a state changed by the statement
                            (else state) ; the M_bool returned false so we don't apply the statement to the state we simply pass up the state
       ))))
          (loop state statement return throw))))))
@@ -231,8 +257,8 @@
 ; Handles M_state for a return 
 ; Sanitizes #t and #f to true/false respectively. 
 (define get_sanitized_result
-  (lambda (state exp throw)
-    (sanitize (M_bool state exp throw))))
+  (lambda (state exp throw class this)
+    (sanitize (M_bool state exp throw class this))))
 
 ; Handles returning and special return for #t and #f 
 (define sanitize
@@ -247,46 +273,79 @@
   (lambda (parse_tree)
     (cdar parse_tree)))
 
+(define create_new_obj
+  (lambda (state class_name)
+    (create_obj_info (instantiate_class_fields state class_name) class_name)))
+
+(define create_obj_info
+  (lambda (fields class_name)
+    (cons class_name (cons fields '()))))
+
+(define instantiate_class_fields
+  (lambda (state class_name)
+    (M_state_class_instance (add_empty_layer (cons (get_global state) ())) (get_class_body state class_name) class_name)))
+
+(define get_class_body
+  (lambda (state class_name)
+    (caddr (get_from_environment (get_global state) class_name))))
+    
+
 ; Handles M_value. 
 ; Does +/-/*/"/"/%
 (define M_val_expression
-  (lambda (state exp throw)
+  (lambda (state exp throw class this)
     (cond
       ((null? exp) '())
       ((number? exp) exp)
-      ((eq? (operator exp) 'funcall) (do_func state (eval_func_name exp) (eval_func_input exp) throw))
+      ((eq? (operator exp) 'funcall) (do_func state (eval_func_name exp) (eval_func_input exp) throw class this)) ; TODO: rework this for functions
+      ((eq? (operator exp) 'dot) (get_field_value (M_bool state (cadr exp) throw class this) (caddr exp)))
+      ((eq? (operator exp) 'new) (create_new_obj state (cadr exp)))
       ((eq? (operator exp) '+) (+ (M_val_expression state (operand1 exp) throw) (M_val_expression state (operand2 exp) throw)))
       ((eq? (operator exp) '-) (if (unary? exp)
-                                   (- 0 (M_val_expression state (operand1 exp) throw))
-                                   (- (M_val_expression state (operand1 exp) throw) (M_val_expression state (operand2 exp) throw))))
-      ((eq? (operator exp) '*) (* (M_val_expression state (operand1 exp) throw) (M_val_expression state (operand2 exp) throw)))
-      ((eq? (operator exp) '/) (quotient (M_val_expression state (operand1 exp) throw) (M_val_expression state (operand2 exp) throw)))
-      ((eq? (operator exp) '%) (remainder (M_val_expression state (operand1 exp) throw) (M_val_expression state (operand2 exp) throw)))
-      ((list? (first_part_of_exp exp)) (M_val_expression state (first_part_of_exp exp) throw))
+                                   (- 0 (M_val_expression state (operand1 exp) throw class this))
+                                   (- (M_val_expression state (operand1 exp) throw class this) (M_val_expression state (operand2 exp) throw class this))))
+      ((eq? (operator exp) '*) (* (M_val_expression state (operand1 exp) throw class this) (M_val_expression state (operand2 exp) throw class this)))
+      ((eq? (operator exp) '/) (quotient (M_val_expression state (operand1 exp) throw class this) (M_val_expression state (operand2 exp) throw class this)))
+      ((eq? (operator exp) '%) (remainder (M_val_expression state (operand1 exp) throw class this) (M_val_expression state (operand2 exp) throw class this)))
+      ((list? (first_part_of_exp exp)) (M_val_expression state (first_part_of_exp exp) throw class this))
       ((number? (first_part_of_exp exp)) (first_part_of_exp exp))
-      (else (get_from_environment state (first_part_of_exp exp))))))
+      (else (get_from_environment (car state) (first_part_of_exp exp)))))) ; TODO: replace this with a chain of funcs that checks for name in the ?local env, then the state env, then the super state env?
+
+;(define get_variable_value
+ ; (lambda (state name throw class this)
+  ;  (cond
+      
+
+(define get_field_value
+  (lambda (obj field_name)
+    (get_from_environment (car (get_obj_env obj)) field_name)))
+
+(define get_obj_env
+  (lambda (obj)
+    (cadr obj)))
+    
 
 ; M_bool handles returning booleans. It can also evaluate mathematical expressions. 
 ; The reason for this is because of == and !=
 ; Our implementation allows <bool> == <bool> or <math> == <math>
 (define M_bool
-  (lambda (state exp throw)
+  (lambda (state exp throw class this)
     (cond
       ((null? exp) '())
       ((number? exp) exp)
       ((eq? exp 'true) #t)
       ((eq? exp 'false) #f)
-      ((not (list? exp)) (get_from_environment state exp))
-      ((eq? (operator exp) '==) (eq? (M_bool state (first_part_of_bool exp) throw) (M_bool state (second_part_of_bool exp) throw)))
-      ((eq? (operator exp) '!=) (not (eq? (M_bool state (first_part_of_bool exp) throw) (M_bool state (second_part_of_bool exp) throw))))
-      ((eq? (operator exp) '<) (< (M_bool state (first_part_of_bool exp) throw) (M_bool state (second_part_of_bool exp) throw)))
-      ((eq? (operator exp) '>) (> (M_bool state (first_part_of_bool exp) throw) (M_bool state (second_part_of_bool exp) throw)))
-      ((eq? (operator exp) '<=) (<= (M_bool state (first_part_of_bool exp) throw) (M_bool state (second_part_of_bool exp) throw)))
-      ((eq? (operator exp) '>=) (>= (M_bool state (first_part_of_bool exp) throw) (M_bool state (second_part_of_bool exp) throw)))
-      ((eq? (operator exp) '||) (or (M_bool state (first_part_of_bool exp) throw) (M_bool state (second_part_of_bool exp) throw)))
-      ((eq? (operator exp) '&&) (and (M_bool state (first_part_of_bool exp) throw) (M_bool state (second_part_of_bool exp) throw)))
-      ((eq? (operator exp) '!) (not (M_bool state (first_part_of_bool exp) throw)))
-      (else (M_val_expression state exp throw)))))
+      ((not (list? exp)) (get_from_environment (car state) exp))
+      ((eq? (operator exp) '==) (eq? (M_bool state (first_part_of_bool exp) throw class this) (M_bool state (second_part_of_bool exp) throw class this)))
+      ((eq? (operator exp) '!=) (not (eq? (M_bool state (first_part_of_bool exp) throw class this) (M_bool state (second_part_of_bool exp) throw class this))))
+      ((eq? (operator exp) '<) (< (M_bool state (first_part_of_bool exp) throw class this) (M_bool state (second_part_of_bool exp) throw class this)))
+      ((eq? (operator exp) '>) (> (M_bool state (first_part_of_bool exp) throw class this) (M_bool state (second_part_of_bool exp) throw class this)))
+      ((eq? (operator exp) '<=) (<= (M_bool state (first_part_of_bool exp) throw class this) (M_bool state (second_part_of_bool exp) throw class this)))
+      ((eq? (operator exp) '>=) (>= (M_bool state (first_part_of_bool exp) throw class this) (M_bool state (second_part_of_bool exp) throw class this)))
+      ((eq? (operator exp) '||) (or (M_bool state (first_part_of_bool exp) throw class this) (M_bool state (second_part_of_bool exp) throw class this)))
+      ((eq? (operator exp) '&&) (and (M_bool state (first_part_of_bool exp) throw class this) (M_bool state (second_part_of_bool exp) throw class this)))
+      ((eq? (operator exp) '!) (not (M_bool state (first_part_of_bool exp) throw class this)))
+      (else (M_val_expression state exp throw class this)))))
 
 ; Determines whether "if" has an optional or not 
 (define has_optional
@@ -338,20 +397,20 @@
 
 ; list of environment operations for handling a list of environments
 (define new_environment
-  (lambda () 
-    (cons (add_empty_layer ()) ())))
+  (lambda (global_env) 
+    (cons (add_empty_layer ()) (cons global_env ()))))
 
 (define get_top_environment
   (lambda (environments)
     (cond
-      ((null? environment) (error "No Environment passed"))
+      ((null? environments) (error "No Environment passed"))
       (else (car environments)))))
 
 (define get_global
   (lambda (environments)
     (cond
       ((null? environments) (error "No environment passed"))
-      ((null? (head environments)) (car environments))
+      ((null? (cdr environments)) (car environments))
       (else (get_global (cdr environments))))))
 
 ; Environment operations. An environment is a linked list of states
