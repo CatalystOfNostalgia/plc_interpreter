@@ -10,11 +10,21 @@
 ; such that main can then be run, Effectively interpreting and executing a very simple Java/C-ish language.
 (define interpret
   (lambda (filename class_name)
-    (do_func (parse_classes (add_empty_layer ()) (parser filename)) 'main () (lambda (e s) "No catch for throw."))))
+    (do_main (parse_classes (add_empty_layer ()) (parser filename)) class_name)))
 
 (define do_main
   (lambda (env_with_classes class_name)
-    (do_func (new_environment env_with_classes) 'main () (lambda (e s) "No catch for throw.") class_name () () ())))
+    (do_func (get_class_env (new_environment env_with_classes) class_name) 'main () (lambda (e s) "No catch for throw.") class_name ())))
+
+(define get_class_env
+  (lambda (envs class_name)
+    (make_proper_class_env envs(class_env (get_from_environment (get_global envs) class_name)))))
+
+(define class_env cadr)
+
+(define make_proper_class_env
+  (lambda (envs local_class_env)
+    (cons local_class_env (cons (get_global envs) ()))))
 
 ; Calls a function, returns the return value of the function.
 (define do_func
