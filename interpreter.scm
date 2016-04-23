@@ -14,13 +14,18 @@
 
 (define do_main
   (lambda (env_with_classes class_name)
-    (do_func (get_class_env (new_environment env_with_classes) class_name) 'main () (lambda (e s) "No catch for throw.") class_name ())))
+    (do_main_with_class_env (get_class_env (new_environment env_with_classes) class_name) class_name)))
+
+(define do_main_with_class_env
+  (lambda (state class_name)
+    (do_func_with_env state state 'main () (lambda (e s) "No catch for throw.") class_name () ())))
 
 (define get_class_env
   (lambda (envs class_name)
-    (make_proper_class_env envs(class_env (get_from_environment (get_global envs) class_name)))))
+    (make_proper_class_env envs (class_env (get_from_environment (get_global envs) class_name)))))
 
 (define class_env cadr)
+(define super_name car)
 
 (define make_proper_class_env
   (lambda (envs local_class_env)
@@ -30,26 +35,50 @@
   (lambda (state name param_vals throw class this)
     (cond
       ((list? name) (do_func_with_dot state name param_vals throw class this))
-      (else (do_func_with_implicit_this name param_vals throw class this)))))
+      (else (do_func_with_implicit_this name param_vals throw class this this)))))
 
-(define do_func_with_implicit_this
-  (lambda (state name param_vals throw class this)
+(define do_func_with_dot
+  (lambda (state dot-expr param_vals throw class this)
     (cond
-      ((var_exists_in_environment? (car (state)) name) (do_func_with_env state name param_vals throw class this))
-      ()))) ; TODO: do_func_check_this_class, checks the class of this for the function, if it's there, run, otherwise check supers
+      ((and (eq? (dot_obj dot-expr) 'this) (not (null? this))) (do_func_check_class (get_class_env state (car this)) state (dot_func_name dot-expr) param_vals throw (car this) this this))
+      ((and (eq? (dot_obj dot-expr) 'this) (null? this)) (error "this used outside of class function"))
+      ((and (eq? (dot_obj dot-expr) 'super) (not (null? this))) (do_func_check_class (get_class_env state (get_super_class state (car this))) state (dot_func_name dot-expr) param_vals throw (get_super_class state (car this)) this this))
+      ((and (eq? (dot_obj dot-expr) 'super) (null? this)) (error "super used outside of class function"))
+      (else (eval_dot_obj state dot-expr param_vals throw class this (M_bool state (dot_obj dot-expr) throw class this))))))
 
+(define eval_dot_obj
+  (lambda (state dot-expr param_vals throw class this func-this)
+    (do_func_check_class (get_class_env state (car func-this)) state (dot_func_name dot-expr) param_vals throw (car func-this) this func-this)))
+    
+(define dot_obj cadr)
+(define dot_func_name caddr)
+      
+(define do_func_with_implicit_this
+  (lambda (state name param_vals throw class this func-this)
+    (cond
+      ((var_exists_in_environment? (car (state)) name) (do_func_with_env state state name param_vals throw class this func-this))
+      (else (do_func_check_class (get_class_env state class) state name param_vals throw class this func-this))))) ; TODO: do_func_check_this_class, checks the class of this for the function, if it's there, run, otherwise check supers
+
+(define do_func_check_class
+  (lambda (func-state var-state name param_vals throw class this func-this)
+    (cond
+      ((var_exists_in_environment? (car func-state) name) (do_func_with_env func-state var-state name param_vals throw class this func-this))
+      ((null? (get_super_class state class)) (error "Function does not exist"))
+      (else (do_func_check_class (get_class_env state (get_super_class class)) var-state name param_vals throw (get_super_class class) this func-this)))))
+      
+  
 ; Calls a function, returns the return value of the function.
 (define do_func_with_env
-  (lambda (state name param_vals throw class this) ; TODO: need two states, one that has the function info, one that has the input param vals
+  (lambda (func-state var-state name param_vals throw class this func-this) ; TODO: need two states, one that has the function info, one that has the input param vals
     (call/cc
      (lambda (return)
-       (M_state_statement (get_func_state state name param_vals throw class this)
-                          (get_func_body state name)
+       (M_state_statement (get_func_state func-state var-state name param_vals throw class this)
+                          (get_func_body func-state name)
                           return
                           (lambda (v) (error "Continue outside of loop"))
                           (lambda (v) (error "Break outside of loop"))
                           (lambda (v) (error "Break or continue outside of loop"))
-                          throw class this)))))
+                          throw class func-this)))))
 
 ; returns the body of the function
 (define get_func_body
@@ -58,8 +87,8 @@
 
 ;returns the initial state/environment for the function being called
 (define get_func_state
-  (lambda (state name param_vals throw class this)
-    (make_proper_class_env state (assign_func_vars (get_stored_param_names state name) (resolve_input state param_vals throw class this) (add_empty_layer ())))))
+  (lambda (func-state var-state name param_vals throw class this)
+    (make_proper_class_env func-state (assign_func_vars (get_stored_param_names func-state name) (resolve_input var-state param_vals throw class this) (add_empty_layer ())))))
 
 (define assign_func_vars
   (lambda (vars vals state)
@@ -357,6 +386,8 @@
       ((number? exp) exp)
       ((eq? exp 'true) #t)
       ((eq? exp 'false) #f)
+      ((eq? exp 'this) this)
+      ((eq? exp 'super) (get_class_env state (get_super_class state (car this))))
       ((not (list? exp)) (get_from_environment (car state) exp))
       ((eq? (operator exp) '==) (eq? (M_bool state (first_part_of_bool exp) throw class this) (M_bool state (second_part_of_bool exp) throw class this)))
       ((eq? (operator exp) '!=) (not (eq? (M_bool state (first_part_of_bool exp) throw class this) (M_bool state (second_part_of_bool exp) throw class this))))
@@ -508,6 +539,9 @@
     (if (null? (cdr envs))
         (set_value_in_environment envs var val)
         (make_proper_class_env envs (set_value_in_environment (car envs) var val)))))
+
+;(define set_value_maybe_in_obj
+ ; (lambda 
 
 ;if function or variable is declared in environment add a layer that represents its value 
 (define set_value_in_environment
