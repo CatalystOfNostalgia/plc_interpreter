@@ -1,4 +1,4 @@
-; PLC Project 2
+; PLC Project 4
 ; Eric Luan
 ; Steven Wendling
 ; William Ordiway 
@@ -42,7 +42,7 @@
     (cond
       ((and (eq? (dot_obj dot-expr) 'this) (not (null? this))) (do_func_check_class (get_class_env state (car this)) state (dot_func_name dot-expr) param_vals throw (car this) this this))
       ((and (eq? (dot_obj dot-expr) 'this) (null? this)) (error "this used outside of class function"))
-      ((and (eq? (dot_obj dot-expr) 'super) (not (null? this))) (do_func_check_class (get_class_env state (get_super_class state (car this))) state (dot_func_name dot-expr) param_vals throw (get_super_class state (car this)) this this))
+      ((and (eq? (dot_obj dot-expr) 'super) (not (null? this))) (do_func_check_class (get_class_env state (get_super_class state class)) state (dot_func_name dot-expr) param_vals throw (get_super_class state class) this this))
       ((and (eq? (dot_obj dot-expr) 'super) (null? this)) (error "super used outside of class function"))
       (else (eval_dot_obj state dot-expr param_vals throw class this (M_bool state (dot_obj dot-expr) throw class this))))))
 
@@ -63,8 +63,8 @@
   (lambda (func-state var-state name param_vals throw class this func-this)
     (cond
       ((var_exists_in_environment? (car func-state) name) (do_func_with_env func-state var-state name param_vals throw class this func-this))
-      ((null? (get_super_class state class)) (error "Function does not exist"))
-      (else (do_func_check_class (get_class_env state (get_super_class class)) var-state name param_vals throw (get_super_class class) this func-this)))))
+      ((null? (get_super_class func-state class)) (error "Function does not exist"))
+      (else (do_func_check_class (get_class_env func-state (get_super_class func-state class)) var-state name param_vals throw (get_super_class func-state class) this func-this)))))
       
   
 ; Calls a function, returns the return value of the function.
@@ -167,7 +167,7 @@
   (lambda (class_name_list)
     (cond
       ((null? class_name_list) '())
-      (else (car class_name_list)))))
+      (else (cadr class_name_list)))))
 
 ; Returns the given environment with a new function defined by initializing the function and then creating closure
 (define M_state_funcdef
@@ -269,9 +269,16 @@
 ; Handles M_state of an assign statement 
 (define M_state_assign
   (lambda (state stmt throw class this)
-    (if (null? (assign_exp stmt))
-        (set_value_in_environments state (symbol stmt) '())
-        (set_value_in_environments state (symbol stmt) (M_bool state (cadr stmt) throw class this)))))
+    (cond
+      ((null? (assign_exp stmt)) (set_value_in_environments state (symbol stmt) '()))
+      ((list? (symbol stmt)) (set_val_ignore_results state (M_bool state (cadar stmt) throw class this) (caddar stmt) (M_bool state (cadr stmt) throw class this) throw class this))
+      (else (set_value_in_environments state (symbol stmt) (M_bool state (cadr stmt) throw class this))))))
+
+(define set_val_ignore_results
+  (lambda (ret-state obj var val throw class this)
+    (if (null? (set_value_in_environments (cadr obj) var val))
+        ret-state
+        ret-state)))
 
 ; Handles M_state of an if statement 
 (define M_state_if
