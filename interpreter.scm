@@ -26,9 +26,21 @@
   (lambda (envs local_class_env)
     (cons local_class_env (cons (get_global envs) ()))))
 
-; Calls a function, returns the return value of the function.
 (define do_func
   (lambda (state name param_vals throw class this)
+    (cond
+      ((list? name) (do_func_with_dot state name param_vals throw class this))
+      (else (do_func_with_implicit_this name param_vals throw class this)))))
+
+(define do_func_with_implicit_this
+  (lambda (state name param_vals throw class this)
+    (cond
+      ((var_exists_in_environment? (car (state)) name) (do_func_with_env state name param_vals throw class this))
+      ()))) ; TODO: do_func_check_this_class, checks the class of this for the function, if it's there, run, otherwise check supers
+
+; Calls a function, returns the return value of the function.
+(define do_func_with_env
+  (lambda (state name param_vals throw class this) ; TODO: need two states, one that has the function info, one that has the input param vals
     (call/cc
      (lambda (return)
        (M_state_statement (get_func_state state name param_vals throw class this)
@@ -47,19 +59,19 @@
 ;returns the initial state/environment for the function being called
 (define get_func_state
   (lambda (state name param_vals throw class this)
-    (add_state_layer (get_stored_state state name) (assign_func_vars (get_stored_param_names state name) (resolve_input state param_vals throw class this) new_state))))
+    (make_proper_class_env state (assign_func_vars (get_stored_param_names state name) (resolve_input state param_vals throw class this) (add_empty_layer ())))))
 
 (define assign_func_vars
   (lambda (vars vals state)
     (cond
       ((and (null? vars) (null? vals)) state)
       ((or (null? vars) (null? vals)) (error "Input parameters mismatch with formal parameter count."))
-      (else (assign_func_vars (cdr vars) (cdr vals) (assign (initialize_variable state (car vars)) (car vars) (car vals)))))))
+      (else (assign_func_vars (cdr vars) (cdr vals) (set_value_in_environments (initialize_in_environments state (car vars)) (car vars) (car vals)))))))
 
 ;------------Abstractions for looking up parameters and state for a function----;
-(define get_stored_state ; TODO: NEED TO GET RID OF: want a function that does (new_environment (get_global state)) to create a new state based on the old one, need to look into functions defined in functions
-  (lambda (state name)
-    (env_func_state (get_from_environment (car state) name))))
+;(define get_stored_state ; TODO: NEED TO GET RID OF: want a function that does (new_environment (get_global state)) to create a new state based on the old one, need to look into functions defined in functions
+;  (lambda (state name)
+;    (new_environment (get_global state))))
 
 (define get_stored_param_names
   (lambda (state name)
@@ -113,7 +125,7 @@
     (cond
       ((and (null? parse_tree) (null? (get_super_class state class_name))) (M_state_class_instance state (get_class_body state (get_super_class state class_name)) (get_super_class state class_name)))
       ((null? parse_tree) state)
-      ((and (eq? (first_symbol parse_tree) 'var) (not (variable_in_environment (cadar parse_tree)))) (M_state_class (M_state_init state (rest_of_statement parse_tree) (lambda (e s) "No catch for throw") () ()) (next_stmt parse_tree)))
+      ((and (eq? (first_symbol parse_tree) 'var) (not (var_exists_in_environment? (car state) (cadar parse_tree)))) (M_state_class (M_state_init state (rest_of_statement parse_tree) (lambda (e s) "No catch for throw") () ()) (next_stmt parse_tree)))
       ((eq? (first_symbol parse_tree) 'function) (M_state_class state (next_stmt parse_tree)))
       ((eq? (first_symbol parse_tree) 'static-function) (M_state_class state (next_stmt parse_tree)))
       (else (error "Non-declarative statement outside of function.")))))
@@ -131,19 +143,19 @@
 ; Returns the given environment with a new function defined by initializing the function and then creating closure
 (define M_state_funcdef
   (lambda (state parse_tree)
-    (return_finished_environment (initialize_in_environment state (symbol parse_tree)) parse_tree)))
+    (return_finished_environment (initialize_in_environments state (symbol parse_tree)) parse_tree)))
 
 ; wrapper for M_state_funcdef that ensures the environment with the function added is returned
-(define return_finished_environment
+(define return_finished_environment ; TODO: evaluate use of this function in global case and inside of a function case
   (lambda (state parse_tree)
-    (set_value_in_environment state
+    (set_value_in_environments state
                               (symbol parse_tree)
                               (create_closure (function_vars parse_tree) state (function_body parse_tree)))))
 
 ;Closure connomacher was talking about is a contination of the vars and state and body in scope
 (define create_closure
   (lambda (vars state body)
-    (cons vars (cons state (cons body ())))))
+    (cons vars (cons () (cons body ()))))) ; maybe rethink if state should be here, now empty list
 
 ; M_state_statement <state> <parse_tree> <return> <continue> <break> <break-return> <catch> <catch_body> <catch-return>
 ;<state> The state is a list of one or more pairings of variables and values where atoms of pairings signify levels of scope in increasing order, ex: '( ((a)(1)) ((x y) (3 2)) ), could signify x=3; y =2; if(x>y){a=1; ....}  
@@ -218,19 +230,19 @@
 ; Creates a new catch state, intializing the catch variable as the value given to throw
 (define create_catch_state
   (lambda (state try_state catch_body val class this)
-    (set_value_in_environment (initialize_in_environment state (catch_var catch_body)) (catch_var catch_body) (M_bool try_state val (lambda (e s) "Had a throw in a throw") class this))))
+    (set_value_in_environments (initialize_in_environments state (catch_var catch_body)) (catch_var catch_body) (M_bool try_state val (lambda (e s) "Had a throw in a throw") class this))))
 
 ; Handles M_state of an init statement 
 (define M_state_init
   (lambda (state stmt throw class this)
-    (M_state_assign (initialize_in_environment state (symbol stmt)) stmt throw class this)))
+    (M_state_assign (initialize_in_environments state (symbol stmt)) stmt throw class this)))
 
 ; Handles M_state of an assign statement 
 (define M_state_assign
   (lambda (state stmt throw class this)
     (if (null? (assign_exp stmt))
-        (set_value_in_environment state (symbol stmt) '())
-        (set_value_in_environment state (symbol stmt) (M_bool state (cadr stmt) throw class this)))))
+        (set_value_in_environments state (symbol stmt) '())
+        (set_value_in_environments state (symbol stmt) (M_bool state (cadr stmt) throw class this)))))
 
 ; Handles M_state of an if statement 
 (define M_state_if
@@ -293,11 +305,11 @@
 
 (define instantiate_class_fields
   (lambda (state class_name)
-    (M_state_class_instance (add_empty_layer (cons (get_global state) ())) (get_class_body state class_name) class_name)))
+    (M_state_class_instance (new_environment (get_global state)) (get_class_body state class_name) class_name)))
 
 (define get_class_body
   (lambda (state class_name)
-    (caddr (get_from_environment (get_global state) class_name))))
+    (caaddr (get_from_environment (get_global state) class_name))))
     
 
 ; Handles M_value. 
@@ -307,10 +319,10 @@
     (cond
       ((null? exp) '())
       ((number? exp) exp)
-      ((eq? (operator exp) 'funcall) (do_func state (eval_func_name exp) (eval_func_input exp) throw class this)) ; TODO: rework this for functions
+      ((eq? (operator exp) 'funcall) (do_func state (eval_func_name exp) (eval_func_input exp) throw class this))
       ((eq? (operator exp) 'dot) (get_field_value (M_bool state (cadr exp) throw class this) (caddr exp)))
       ((eq? (operator exp) 'new) (create_new_obj state (cadr exp)))
-      ((eq? (operator exp) '+) (+ (M_val_expression state (operand1 exp) throw) (M_val_expression state (operand2 exp) throw)))
+      ((eq? (operator exp) '+) (+ (M_val_expression state (operand1 exp) throw class this) (M_val_expression state (operand2 exp) throw class this)))
       ((eq? (operator exp) '-) (if (unary? exp)
                                    (- 0 (M_val_expression state (operand1 exp) throw class this))
                                    (- (M_val_expression state (operand1 exp) throw class this) (M_val_expression state (operand2 exp) throw class this))))
@@ -476,6 +488,12 @@
     (cond 
       ((null? environment) #f)
       (else (check_var_initialized var (top_layer environment))))))
+
+(define initialize_in_environments
+  (lambda (envs var)
+    (if (null? (cdr envs))
+        (initialize_in_environment envs var)
+        (make_proper_class_env envs (initialize_in_environment (car envs) var)))))
   
 ; Initialize a variable in the top environment 
 (define initialize_in_environment
@@ -484,6 +502,12 @@
       ((null? environment) (error "No environment???"))
       ((not (var_exists_in_environment? environment var)) (add_state_layer (rest_of_environments environment) (initialize_variable (top_layer environment) var)))
       (else (error "Variable already initialized")))))
+
+(define set_value_in_environments
+  (lambda (envs var val)
+    (if (null? (cdr envs))
+        (set_value_in_environment envs var val)
+        (make_proper_class_env envs (set_value_in_environment (car envs) var val)))))
 
 ;if function or variable is declared in environment add a layer that represents its value 
 (define set_value_in_environment
