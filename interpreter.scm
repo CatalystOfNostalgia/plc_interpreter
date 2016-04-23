@@ -387,7 +387,7 @@
       ((eq? exp 'true) #t)
       ((eq? exp 'false) #f)
       ((eq? exp 'this) this)
-      ((eq? exp 'super) (get_class_env state (get_super_class state (car this))))
+      ((eq? exp 'super) (get_class_env state (get_super_class state class)))
       ((not (list? exp)) (get_from_environment (car state) exp))
       ((eq? (operator exp) '==) (eq? (M_bool state (first_part_of_bool exp) throw class this) (M_bool state (second_part_of_bool exp) throw class this)))
       ((eq? (operator exp) '!=) (not (eq? (M_bool state (first_part_of_bool exp) throw class this) (M_bool state (second_part_of_bool exp) throw class this))))
