@@ -12,14 +12,17 @@
   (lambda (filename class_name)
     (do_main (parse_classes (add_empty_layer ()) (parser filename)) class_name)))
 
+; runs the main function of a given class
 (define do_main
   (lambda (env_with_classes class_name)
     (do_main_with_class_env (get_class_env (new_environment env_with_classes) class_name) class_name)))
 
+; given an environment, runs a function that exists in in that environment
 (define do_main_with_class_env
   (lambda (state class_name)
     (do_func_with_env state state 'main () (lambda (e s) "No catch for throw.") class_name () ())))
 
+; returns the class environment with the global environment below it
 (define get_class_env
   (lambda (envs class_name)
     (make_proper_class_env envs (class_env (get_from_environment (get_global envs) class_name)))))
@@ -27,16 +30,19 @@
 (define class_env cadr)
 (define super_name car)
 
+; Takes an environment stack and a local environment and put the global part of the stack below the local environment
 (define make_proper_class_env
   (lambda (envs local_class_env)
     (cons local_class_env (cons (get_global envs) ()))))
 
+; decides if we need to do dot evaluation and calls the appropriate helper function
 (define do_func
   (lambda (state name param_vals throw class this)
     (cond
       ((list? name) (do_func_with_dot state name param_vals throw class this))
       (else (do_func_with_implicit_this state name param_vals throw (car this) this this))))) ; changed class to this's class
 
+; evaluates the dot function to find the object we're using for the future this and class values
 (define do_func_with_dot
   (lambda (state dot-expr param_vals throw class this)
     (cond
@@ -46,19 +52,22 @@
       ((and (eq? (dot_obj dot-expr) 'super) (null? this)) (error "super used outside of class function"))
       (else (eval_dot_obj state dot-expr param_vals throw class this (M_bool state (dot_obj dot-expr) throw class this))))))
 
+; Finds the object we're doing a function on and runs the function
 (define eval_dot_obj
   (lambda (state dot-expr param_vals throw class this func-this)
     (do_func_check_class (get_class_env state (car func-this)) state (dot_func_name dot-expr) param_vals throw (car func-this) this func-this)))
     
 (define dot_obj cadr)
 (define dot_func_name caddr)
-      
+
+; checks the local environment and then the class of this for the function
 (define do_func_with_implicit_this
   (lambda (state name param_vals throw class this func-this)
     (cond
       ((var_exists_in_environment? (car state) name) (do_func_with_env state state name param_vals throw class this func-this))
       (else (do_func_check_class (get_class_env state class) state name param_vals throw class this func-this)))))
 
+; checks for a function inside a class
 (define do_func_check_class
   (lambda (func-state var-state name param_vals throw class this func-this)
     (cond
@@ -68,6 +77,9 @@
       
   
 ; Calls a function, returns the return value of the function.
+; func-state being the state that holds the function
+; var-state being the state that holds the variable values
+; func-this being the this object for the coming function call.
 (define do_func_with_env
   (lambda (func-state var-state name param_vals throw class this func-this) ; TODO: need two states, one that has the function info, one that has the input param vals
     (call/cc
@@ -88,8 +100,10 @@
 ;returns the initial state/environment for the function being called
 (define get_func_state
   (lambda (func-state var-state name param_vals throw class this)
-    (make_proper_class_env func-state (assign_func_vars (get_stored_param_names func-state name) (resolve_input var-state param_vals throw class this) (add_empty_layer ())))))
+      ;((not (null? get_stored_state func-state name)) (make_proper_class_env func-state (assign_func_vars (get_stored_param_names func-state name) (resolve_input var-state param_vals throw class this) (car (get_stored_state func-state name)))))
+      (make_proper_class_env func-state (assign_func_vars (get_stored_param_names func-state name) (resolve_input var-state param_vals throw class this) (add_empty_layer ())))))
 
+; assigns given variables to the given values in the given state
 (define assign_func_vars
   (lambda (vars vals state)
     (cond
@@ -98,9 +112,9 @@
       (else (assign_func_vars (cdr vars) (cdr vals) (set_value_in_environments (initialize_in_environments state (car vars)) (car vars) (car vals)))))))
 
 ;------------Abstractions for looking up parameters and state for a function----;
-;(define get_stored_state ; TODO: NEED TO GET RID OF: want a function that does (new_environment (get_global state)) to create a new state based on the old one, need to look into functions defined in functions
-;  (lambda (state name)
-;    (new_environment (get_global state))))
+(define get_stored_state ; TODO: NEED TO GET RID OF: want a function that does (new_environment (get_global state)) to create a new state based on the old one, need to look into functions defined in functions
+  (lambda (state name)
+    (cadr (get_from_environment state name))))
 
 (define get_stored_param_names
   (lambda (state name)
@@ -125,10 +139,12 @@
       ((eq? (first_symbol parse_tree) 'class) (parse_classes (M_state_classdef state (rest_of_statement parse_tree)) (next_stmt parse_tree)))
       (else (error "Non-class statement at top level")))))
 
+; creates a class definition in the given state
 (define M_state_classdef
   (lambda (state parse_tree)
     (make_class_binding (initialize_in_environment state (symbol parse_tree)) (cdr parse_tree) (symbol parse_tree))))
 
+; sets the closure of the class as the mapped value for the class name
 (define make_class_binding
   (lambda (state parse_tree class_name)
     (set_value_in_environment state class_name (create_class_closure parse_tree))))
@@ -149,6 +165,7 @@
       ((eq? (first_symbol parse_tree) 'static-function) (M_state_class (M_state_funcdef state (rest_of_statement parse_tree)) (next_stmt parse_tree)))
       (else (error "Non-declarative statement outside of function.")))))
 
+; Iterates over a class body and initialize variables, including parent classes
 (define M_state_class_instance
   (lambda (state parse_tree class_name)
     (cond
@@ -160,10 +177,12 @@
       ((eq? (first_symbol parse_tree) 'static-function) (M_state_class_instance state (next_stmt parse_tree) class_name))
       (else (error "Non-declarative statement outside of function.")))))
 
+; returns the super class name of the given class name
 (define get_super_class
   (lambda (state class_name)
     (maybe_grab_class_name (car (get_from_environment (get_global state) class_name)))))
 
+; only returns a class name if it exists
 (define maybe_grab_class_name
   (lambda (class_name_list)
     (cond
@@ -186,6 +205,20 @@
 (define create_closure
   (lambda (vars state body)
     (cons vars (cons () (cons body ()))))) ; maybe rethink if state should be here, now empty list
+
+;(define M_state_local_funcdef
+ ; (lambda (state parse_tree)
+  ;  (return_finished_local_func_env (initialize_in_environments state (symbol parse_tree)) parse_tree)))
+
+;(define return_finished_local_func_env
+ ; (lambda (state parse_tree)
+  ;  (set_value_in_environments state
+   ;                           (symbol parse_tree)
+    ;                          (create_local_closure (function_vars parse_tree) state (function_body parse_tree)))))
+
+;(define create_local_closure
+ ; (lambda (vars state body)
+  ;  (cons vars (cons state (cons body ())))))
 
 ; M_state_statement <state> <parse_tree> <return> <continue> <break> <break-return> <catch> <catch_body> <catch-return>
 ;<state> The state is a list of one or more pairings of variables and values where atoms of pairings signify levels of scope in increasing order, ex: '( ((a)(1)) ((x y) (3 2)) ), could signify x=3; y =2; if(x>y){a=1; ....}  
@@ -220,7 +253,7 @@
       ((eq? (first_symbol parse_tree) 'if) (M_state_statement (M_state_if state (rest_of_statement parse_tree) return continue break break-return throw class this) (next_stmt parse_tree) return continue break break-return throw class this))
       ((eq? (first_symbol parse_tree) 'while) (M_state_statement (M_state_while state (rest_of_statement parse_tree) return throw class this) (next_stmt parse_tree) return continue break break-return throw class this))
       ((eq? (first_symbol parse_tree) 'try) (M_state_statement (M_state_try
-                                                                state
+                                                                (enter_block state)
                                                                 (rest_of_statement parse_tree)
                                                                 return continue break (lambda (v)
                                                                                         (if (null? (exit_block v))
@@ -276,6 +309,7 @@
       ((and (not (null? (cdr state))) (not (var_exists_in_environment? (car state) (symbol stmt)))) (set_val_ignore_results state (M_bool state 'this throw class this) (symbol stmt) (M_bool state (cadr stmt) throw class this) throw class this))
       (else (set_value_in_environments state (symbol stmt) (M_bool state (cadr stmt) throw class this))))))
 
+; sets a value in a field and return the input state
 (define set_val_ignore_results
   (lambda (ret-state obj var val throw class this)
     (if (null? (set_value_in_environments (get_obj_env obj) var val))
@@ -333,18 +367,22 @@
   (lambda (parse_tree)
     (cdar parse_tree)))
 
+; creates an object of type class_name, return that object
 (define create_new_obj
   (lambda (state class_name)
     (create_obj_info (instantiate_class_fields state class_name) class_name)))
 
+; creates object binding/closure
 (define create_obj_info
   (lambda (fields class_name)
     (cons class_name (cons fields '()))))
 
+; uses class bodies to determine instances of fields
 (define instantiate_class_fields
   (lambda (state class_name)
     (M_state_class_instance (new_environment (get_global state)) (get_class_body state class_name) class_name)))
 
+; returns the class body of a given class
 (define get_class_body
   (lambda (state class_name)
     (caaddr (get_from_environment (get_global state) class_name))))
@@ -371,14 +409,13 @@
       ((number? (first_part_of_exp exp)) (first_part_of_exp exp))
       ;(else (get_from_environment (car state) (first_part_of_exp exp)))))) ; TODO: replace this with a chain of funcs that checks for name in the ?local env, then the state env, then the super state env?
       (else (get_var_from_anywhere state (first_part_of_exp exp) class this)))))
-;(define get_variable_value
- ; (lambda (state name throw class this)
-  ;  (cond
 
+; checks various places where a variable could live
 (define get_var_from_anywhere
   (lambda (state var class this)
     (get_var_from_local? state var class this)))
 
+; checks if the variable lives in the local env
 (define get_var_from_local?
   (lambda (state var class this)
     (cond
@@ -386,12 +423,14 @@
       ((eq? (car this) class) (get_var_from_this? state var class this))
       (else (get_var_from_class? (get_class_env state class) var class this)))))
 
+; checks for the variable in the this object variable list
 (define get_var_from_this?
   (lambda (state var class this)
     (cond
       ((var_exists_in_environment? (car (get_obj_env this)) var) (get_from_environment (car (get_obj_env this)) var))
       (else (get_var_from_class? (get_class_env state (get_super_class state class)) var (get_super_class state class) this)))))
 
+; checks for default values of a variable in a class
 (define get_var_from_class?
   (lambda (state var class this)
     (cond
@@ -400,10 +439,12 @@
       ((null? (get_super_class state class)) (error "No such field exists"))
       (else (get_var_from_class? (get_class_env state (get_super_class state class)) var (get_super_class state class) this)))))
 
+; returns the value of a field in an object
 (define get_field_value
   (lambda (obj field_name)
     (get_from_environment (car (get_obj_env obj)) field_name)))
 
+; returns the environemtn stored in an object
 (define get_obj_env
   (lambda (obj)
     (cadr obj)))
