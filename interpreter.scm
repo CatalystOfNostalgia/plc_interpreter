@@ -35,7 +35,7 @@
   (lambda (state name param_vals throw class this)
     (cond
       ((list? name) (do_func_with_dot state name param_vals throw class this))
-      (else (do_func_with_implicit_this name param_vals throw class this this)))))
+      (else (do_func_with_implicit_this state name param_vals throw (car this) this this))))) ; changed class to this's class
 
 (define do_func_with_dot
   (lambda (state dot-expr param_vals throw class this)
@@ -56,8 +56,8 @@
 (define do_func_with_implicit_this
   (lambda (state name param_vals throw class this func-this)
     (cond
-      ((var_exists_in_environment? (car (state)) name) (do_func_with_env state state name param_vals throw class this func-this))
-      (else (do_func_check_class (get_class_env state class) state name param_vals throw class this func-this))))) ; TODO: do_func_check_this_class, checks the class of this for the function, if it's there, run, otherwise check supers
+      ((var_exists_in_environment? (car state) name) (do_func_with_env state state name param_vals throw class this func-this))
+      (else (do_func_check_class (get_class_env state class) state name param_vals throw class this func-this)))))
 
 (define do_func_check_class
   (lambda (func-state var-state name param_vals throw class this func-this)
@@ -152,11 +152,12 @@
 (define M_state_class_instance
   (lambda (state parse_tree class_name)
     (cond
-      ((and (null? parse_tree) (null? (get_super_class state class_name))) (M_state_class_instance state (get_class_body state (get_super_class state class_name)) (get_super_class state class_name)))
-      ((null? parse_tree) state)
-      ((and (eq? (first_symbol parse_tree) 'var) (not (var_exists_in_environment? (car state) (cadar parse_tree)))) (M_state_class (M_state_init state (rest_of_statement parse_tree) (lambda (e s) "No catch for throw") () ()) (next_stmt parse_tree)))
-      ((eq? (first_symbol parse_tree) 'function) (M_state_class state (next_stmt parse_tree)))
-      ((eq? (first_symbol parse_tree) 'static-function) (M_state_class state (next_stmt parse_tree)))
+      ((and (null? parse_tree) (null? (get_super_class state class_name))) state)
+      ((null? parse_tree) (M_state_class_instance state (get_class_body state (get_super_class state class_name)) (get_super_class state class_name)))
+      ((and (eq? (first_symbol parse_tree) 'var) (not (var_exists_in_environment? (car state) (cadar parse_tree)))) (M_state_class_instance (M_state_init state (rest_of_statement parse_tree) (lambda (e s) "No catch for throw") () ()) (next_stmt parse_tree) class_name))
+      ((eq? (first_symbol parse_tree) 'var) (M_state_class_instance state (next_stmt parse_tree) class_name))
+      ((eq? (first_symbol parse_tree) 'function) (M_state_class_instance state (next_stmt parse_tree) class_name))
+      ((eq? (first_symbol parse_tree) 'static-function) (M_state_class_instance state (next_stmt parse_tree) class_name))
       (else (error "Non-declarative statement outside of function.")))))
 
 (define get_super_class
@@ -272,11 +273,12 @@
     (cond
       ((null? (assign_exp stmt)) (set_value_in_environments state (symbol stmt) '()))
       ((list? (symbol stmt)) (set_val_ignore_results state (M_bool state (cadar stmt) throw class this) (caddar stmt) (M_bool state (cadr stmt) throw class this) throw class this))
+      ((and (not (null? (cdr state))) (not (var_exists_in_environment? (car state) (symbol stmt)))) (set_val_ignore_results state (M_bool state 'this throw class this) (symbol stmt) (M_bool state (cadr stmt) throw class this) throw class this))
       (else (set_value_in_environments state (symbol stmt) (M_bool state (cadr stmt) throw class this))))))
 
 (define set_val_ignore_results
   (lambda (ret-state obj var val throw class this)
-    (if (null? (set_value_in_environments (cadr obj) var val))
+    (if (null? (set_value_in_environments (get_obj_env obj) var val))
         ret-state
         ret-state)))
 
@@ -284,7 +286,7 @@
 (define M_state_if
   (lambda (state stmt return continue break break-return throw class this)
     (cond
-      ((M_bool state (conditional stmt) throw class this) (M_state_statement state (wrap (then_statement stmt)) return continue break break-return throw class this))
+      ((M_bool state (M_bool state (conditional stmt) throw class this) throw class this) (M_state_statement state (wrap (then_statement stmt)) return continue break break-return throw class this))
       ((has_optional stmt) (M_state_statement state (wrap (optional_statement stmt)) return continue break break-return throw class this))
       (else state))))
 
@@ -367,12 +369,36 @@
       ((eq? (operator exp) '%) (remainder (M_val_expression state (operand1 exp) throw class this) (M_val_expression state (operand2 exp) throw class this)))
       ((list? (first_part_of_exp exp)) (M_val_expression state (first_part_of_exp exp) throw class this))
       ((number? (first_part_of_exp exp)) (first_part_of_exp exp))
-      (else (get_from_environment (car state) (first_part_of_exp exp)))))) ; TODO: replace this with a chain of funcs that checks for name in the ?local env, then the state env, then the super state env?
-
+      ;(else (get_from_environment (car state) (first_part_of_exp exp)))))) ; TODO: replace this with a chain of funcs that checks for name in the ?local env, then the state env, then the super state env?
+      (else (get_var_from_anywhere state (first_part_of_exp exp) class this)))))
 ;(define get_variable_value
  ; (lambda (state name throw class this)
   ;  (cond
-      
+
+(define get_var_from_anywhere
+  (lambda (state var class this)
+    (get_var_from_local? state var class this)))
+
+(define get_var_from_local?
+  (lambda (state var class this)
+    (cond
+      ((var_exists_in_environment? (car state) var) (get_from_environment (car state) var))
+      ((eq? (car this) class) (get_var_from_this? state var class this))
+      (else (get_var_from_class? (get_class_env state class) var class this)))))
+
+(define get_var_from_this?
+  (lambda (state var class this)
+    (cond
+      ((var_exists_in_environment? (car (get_obj_env this)) var) (get_from_environment (car (get_obj_env this)) var))
+      (else (get_var_from_class? (get_class_env state (get_super_class state class)) var (get_super_class state class) this)))))
+
+(define get_var_from_class?
+  (lambda (state var class this)
+    (cond
+      ((and (var_exists_in_environment? (car state) var) (null? (get_from_environment (car state) var))) (get_from_environment (car (get_obj_env this)) var))
+      ((var_exists_in_environment? (car state) var) (get_from_environment (car state) var))
+      ((null? (get_super_class state class)) (error "No such field exists"))
+      (else (get_var_from_class? (get_class_env state (get_super_class state class)) var (get_super_class state class) this)))))
 
 (define get_field_value
   (lambda (obj field_name)
@@ -391,11 +417,13 @@
     (cond
       ((null? exp) '())
       ((number? exp) exp)
+      ((eq? exp #t) exp)
+      ((eq? exp #f) exp)
       ((eq? exp 'true) #t)
       ((eq? exp 'false) #f)
       ((eq? exp 'this) this)
       ((eq? exp 'super) (get_class_env state (get_super_class state class)))
-      ((not (list? exp)) (get_from_environment (car state) exp))
+      ((not (list? exp)) (M_val_expression state (cons exp ()) throw class this))
       ((eq? (operator exp) '==) (eq? (M_bool state (first_part_of_bool exp) throw class this) (M_bool state (second_part_of_bool exp) throw class this)))
       ((eq? (operator exp) '!=) (not (eq? (M_bool state (first_part_of_bool exp) throw class this) (M_bool state (second_part_of_bool exp) throw class this))))
       ((eq? (operator exp) '<) (< (M_bool state (first_part_of_bool exp) throw class this) (M_bool state (second_part_of_bool exp) throw class this)))
