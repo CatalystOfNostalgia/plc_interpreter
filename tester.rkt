@@ -19,5 +19,5 @@
 (test "tests4/test9.txt" 'Square 32) ;square has main
 (test "tests4/test10.txt" 'List 15) ;List has main
 (test "tests4/test11.txt" 'List 123456) ;List has main
-;(test "tests4/test12.txt" 'List 5285) ;List has main
+(test "tests4/test12.txt" 'List 5285) ;List has main
 (test "tests4/test13.txt" 'C -716) ;C has main
