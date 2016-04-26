@@ -4,10 +4,11 @@
 ; William Ordiway 
 (load "classParser.scm")
 
-; interpret <filename>
+; interpret <filename> <class containing static-main>
 ; <filename> = "<path/><testname.txt>"
-; runs functionParser.scm on file to obtain parse-tree which is passed to M_state_statement to set up environments.
-; such that main can then be run, Effectively interpreting and executing a very simple Java/C-ish language.
+;<class containing static-main method> = '<name>, ex: 'C
+; runs classParser.scm on file to obtain parse-tree which is passed to parse_classes to set up environments containing closures.
+; such that static-main can then be run, Effectively interpreting and executing a very simple Java/C-ish language.
 (define interpret
   (lambda (filename class_name)
     (do_main (parse_classes (add_empty_layer ()) (parser filename)) class_name)))
@@ -533,11 +534,11 @@
   (lambda (global_env) 
     (cons (add_empty_layer ()) (cons global_env ()))))
 
-(define get_top_environment
-  (lambda (environments)
-    (cond
-      ((null? environments) (error "No Environment passed"))
-      (else (get_top_env environments)))))
+;(define get_top_environment
+;  (lambda (environments)
+;    (cond
+;      ((null? environments) (error "No Environment passed"))
+;      (else (get_top_env environments)))))
 
 (define get_global
   (lambda (environments)
