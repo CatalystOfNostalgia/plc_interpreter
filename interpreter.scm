@@ -270,14 +270,15 @@
        (letrec ((finally (lambda (s)
                            (if (null? (finally_block stmt))
                                state
-                               (M_state_statement state (cadr (finally_block stmt)) return continue break break-return throw class this))))
+                               (M_state_statement state (get_return_finally (finally_block stmt)) return continue break break-return throw class this))))
                 (try (lambda (s try-throw)
                        (finally (M_state_statement state (try_block stmt) return continue break break-return try-throw class this))))
                 (catch (lambda (e s)
-                         (finally (M_state_statement (create_catch_state state s (catch_block stmt) e class this) (caddr (catch_block stmt)) return continue break break-return throw class this)))))
+                         (finally (M_state_statement (create_catch_state state s (catch_block stmt) e class this) (get_return_catch (catch_block stmt)) return continue break break-return throw class this)))))
          (try state (lambda (e s) (try-break (catch e s)))))))))
                   
-                     
+(define get_return_catch caddr)
+(define get_return_finally cadr)
 ; Creates a new catch state, intializing the catch variable as the value given to throw
 (define create_catch_state
   (lambda (state try_state catch_body val class this)
