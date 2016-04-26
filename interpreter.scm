@@ -197,7 +197,7 @@
     (return_finished_environment (initialize_in_environments state (symbol parse_tree)) parse_tree)))
 
 ; wrapper for M_state_funcdef that ensures the environment with the function added is returned
-(define return_finished_environment ; TODO: evaluate use of this function in global case and inside of a function case
+(define return_finished_environment
   (lambda (state parse_tree)
     (set_value_in_environments state
                               (symbol parse_tree)
